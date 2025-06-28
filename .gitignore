@@ -22,3 +22,14 @@ venv
 *.conf
 *.db
 *.ini
+
+# DL Integration - Sensitive Data
+config/
+config.old/
+config.newold/
+tests_and_debug/
+dl_cookies.json
+*.json
+
+# Virtual Environment
+quasarr_venv/

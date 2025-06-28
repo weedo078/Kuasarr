@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  quasarr-dl:
+    image: quasarr-dl:1.6.1
+    container_name: quasarr-dl-test
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config
+    environment:
+      # Grundkonfiguration
+      - INTERNAL_ADDRESS=http://localhost:8080
+      - EXTERNAL_ADDRESS=http://localhost:8080
+      
+      # Hostnames (inkl. data-load.me)
+      - HOSTNAMES=dl:www.data-load.me
+      
+      # data-load.me Login-Daten
+      - DL_USER=weedo078
+      - DL_PASSWORD=zo-2!.ak
+      
+      # Optional: Discord Webhook (auskommentiert)
+      # - DISCORD=https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE
+      
+    restart: unless-stopped 

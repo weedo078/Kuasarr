@@ -203,9 +203,18 @@ def run():
             print("No Discord Webhook URL provided")
         shared_state.update("discord", discord_url)
 
+        # Initialize DL session if configured
+        dl = Config('Hostnames').get('dl')
+        if dl:
+            try:
+                from quasarr.downloads.sources.dl import startup_initialize_session
+                startup_initialize_session(shared_state)
+            except Exception as e:
+                info(f"DL session initialization failed: {e}")
+
         print("\n===== API Information =====")
         print('Setup instructions: "https://github.com/rix1337/Quasarr?tab=readme-ov-file#instructions"')
-        print(f'URL: "{shared_state.values['internal_address']}"')
+        print(f'URL: "{shared_state.values["internal_address"]}"')
         print(f'API key: "{api_key}" (without quotes)')
 
         if external_address != internal_address:
@@ -218,7 +227,7 @@ def run():
         protected = shared_state.get_db("protected").retrieve_all_titles()
         if protected:
             package_count = len(protected)
-            info(f'CAPTCHA-Solution required for {package_count} package{'s' if package_count > 1 else ''} at: '
+            info(f'CAPTCHA-Solution required for {package_count} package{"s" if package_count > 1 else ""} at: '
                  f'"{shared_state.values["external_address"]}/captcha"!')
 
         jdownloader = multiprocessing.Process(

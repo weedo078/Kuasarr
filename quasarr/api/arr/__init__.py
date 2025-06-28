@@ -65,6 +65,12 @@ def setup_arr_routes(app):
             imdb_id = root.find(".//file").attrib.get("imdb_id")
 
             info(f'Attempting download for "{title}"')
+            debug(f'[DOWNLOAD-DEBUG] Title: "{title}"')
+            debug(f'[DOWNLOAD-DEBUG] URL: "{url}"')
+            debug(f'[DOWNLOAD-DEBUG] Mirror: "{mirror}"')
+            debug(f'[DOWNLOAD-DEBUG] Size MB: "{size_mb}"')
+            debug(f'[DOWNLOAD-DEBUG] Password: "{password}"')
+            debug(f'[DOWNLOAD-DEBUG] IMDB ID: "{imdb_id}"')
             request_from = request.headers.get('User-Agent')
             downloaded = download(shared_state, request_from, title, url, mirror, size_mb, password, imdb_id)
             try:

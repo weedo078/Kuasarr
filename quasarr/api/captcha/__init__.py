@@ -51,7 +51,7 @@ def setup_captcha_routes(app):
         link_options = ""
         if len(links) > 1:
             for link in links:
-                if "filecrypt." in link[0]:
+                # Zeige alle Links, nicht nur FileCrypt
                     link_options += f'<option value="{link[0]}">{link[1]}</option>'
             link_select = f'''<div id="mirrors-select">
                     <label for="link-select">Mirror:</label>
@@ -76,10 +76,18 @@ def setup_captcha_routes(app):
                 function handleToken(token) {
                     document.getElementById("puzzle-captcha").remove();
                     document.getElementById("mirrors-select").remove();
-                    document.getElementById("captcha-key").innerText = 'Using result "' + token + '" to decrypt links...';
+                    if (link.includes('filecrypt.')) {
+                        document.getElementById("captcha-key").innerText = 'Using result "' + token + '" to decrypt FileCrypt links...';
+                    } else {
+                        document.getElementById("captcha-key").innerText = 'Using result "' + token + '" to send direct links...';
+                    }
                     var link = document.getElementById("link-hidden").value;
                     const currentPath = window.location.pathname;
-                    const endpoint = '/decrypt-filecrypt';
+                    // Bestimme Endpunkt basierend auf Link-Typ
+                    var endpoint = '/decrypt-links';
+                    if (link.includes('filecrypt.')) {
+                        endpoint = '/decrypt-filecrypt';
+                    }
                     const fullPath = currentPath.endsWith('/') ? currentPath + endpoint.slice(1) : currentPath + endpoint;
 
                     fetch(fullPath, {
@@ -242,5 +250,45 @@ def setup_captcha_routes(app):
 
         except Exception as e:
             info(f"Error decrypting: {e}")
+
+        return {"success": bool(download_links), "title": title}
+
+    @app.post('/captcha/decrypt-links')
+    def submit_direct_links():
+        """Handle non-FileCrypt container services (keeplinks, linkcrypter, etc.) that don't need decryption"""
+        protected = shared_state.get_db("protected").retrieve_all_titles()
+        if not protected:
+            return {"success": False, "title": "No protected packages found! CAPTCHA not needed."}
+
+        download_links = []
+
+        try:
+            data = request.json
+            token = data.get('token')  # Token wird nicht verwendet, aber für Konsistenz beibehalten
+            package_id = data.get('package_id')
+            title = data.get('title')
+            link = data.get('link')
+            password = data.get('password')
+
+            if link:
+                info(f"Received token: {token}")
+                info(f"Sending direct container link for {title}")
+                
+                # Für Container-Services wie keeplinks werden die Links direkt verwendet
+                download_links = [link]
+
+                info(f"Sending {len(download_links)} direct links for {title}")
+
+                if download_links:
+                    downloaded = shared_state.download_package(download_links, title, password, package_id)
+                    if downloaded:
+                        shared_state.get_db("protected").delete(package_id)
+                    else:
+                        raise RuntimeError("Submitting Download to JDownloader failed")
+                else:
+                    raise ValueError("No download links found")
+
+        except Exception as e:
+            info(f"Error processing direct link: {e}")
 
         return {"success": bool(download_links), "title": title}

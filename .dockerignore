@@ -1,0 +1,71 @@
+# Virtual environments
+quasarr_venv/
+venv/
+env/
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Test files and logs
+test_*.py
+*_test.py
+*_debug.py
+simple_*.py
+proof_*.py
+working_*.py
+fixed_*.py
+analyze_*.py
+debug_*.py
+*.html
+*.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (we use specific one)
+docker/
+Dockerfile
+!Dockerfile.local
+
+# Backup files
+*.bak
+*.backup
+
+# Development files
+requirements-dev.txt 

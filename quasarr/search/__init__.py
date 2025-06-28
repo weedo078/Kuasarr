@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from quasarr.providers.log import info
 from quasarr.search.sources.al import al_feed, al_search
 from quasarr.search.sources.dd import dd_search
+from quasarr.search.sources.dl import dl_feed, dl_search
 from quasarr.search.sources.dt import dt_feed, dt_search
 from quasarr.search.sources.dw import dw_feed, dw_search
 from quasarr.search.sources.fx import fx_feed, fx_search
@@ -27,6 +28,7 @@ def get_search_results(shared_state, request_from, imdb_id="", mirror=None, seas
 
     al = shared_state.values["config"]("Hostnames").get("al")
     dd = shared_state.values["config"]("Hostnames").get("dd")
+    dl = shared_state.values["config"]("Hostnames").get("dl")
     dt = shared_state.values["config"]("Hostnames").get("dt")
     dw = shared_state.values["config"]("Hostnames").get("dw")
     fx = shared_state.values["config"]("Hostnames").get("fx")
@@ -47,6 +49,9 @@ def get_search_results(shared_state, request_from, imdb_id="", mirror=None, seas
         if dd:
             functions.append(lambda: dd_search(shared_state, start_time, request_from, imdb_id,
                                                mirror=mirror,
+                                               season=season, episode=episode))
+        if dl:
+            functions.append(lambda: dl_search(shared_state, start_time, request_from, imdb_id,
                                                season=season, episode=episode))
         if dt:
             functions.append(lambda: dt_search(shared_state, start_time, request_from, imdb_id,
@@ -87,6 +92,9 @@ def get_search_results(shared_state, request_from, imdb_id="", mirror=None, seas
 
         if dd:
             functions.append(lambda: dd_search(shared_state, start_time, request_from, mirror=mirror))
+
+        if dl:
+            functions.append(lambda: dl_feed(shared_state, start_time, request_from))
 
         if dt:
             functions.append(lambda: dt_feed(shared_state, start_time, request_from, mirror=mirror))

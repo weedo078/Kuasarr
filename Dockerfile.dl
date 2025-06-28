@@ -1,0 +1,55 @@
+FROM alpine:latest
+LABEL maintainer="quasarr-with-dataload-integration"
+
+# Define package name
+ARG PACKAGE_NAME=quasarr
+
+RUN apk add --no-cache curl \
+    build-base \
+    jq \
+    python3-dev \
+    py3-pip
+
+# Optionally set desired version for the build
+ARG VS="false"
+RUN echo "VS: ${VS}"
+
+# setup
+RUN mkdir -p ~/.config/pip && echo -e "[global]\nbreak-system-packages = true" > ~/.config/pip/pip.conf \
+  && pip3 install --upgrade pip \
+  && pip3 install wheel
+
+# Install specified package version and clean up unneeded packages
+RUN if [[ ${VS} == "false" ]] ; then echo "Grabbing latest version from pypi.org" && VERSION=$(curl -Ls https://pypi.org/pypi/${PACKAGE_NAME}/json | jq -r .info.version) ; else echo "Using version from workflow_dispatch input" && VERSION=$VS ; fi  && \
+  echo $VERSION && \
+  pip3 install ${PACKAGE_NAME}=="$VERSION" --no-cache-dir && \
+    apk del curl build-base jq
+
+# Now add our data-load.me enhancements - ALLE DATEIEN
+COPY quasarr/search/sources/dl.py /usr/lib/python3.12/site-packages/quasarr/search/sources/dl.py
+COPY quasarr/downloads/sources/dl.py /usr/lib/python3.12/site-packages/quasarr/downloads/sources/dl.py
+COPY quasarr/downloads/__init__.py /usr/lib/python3.12/site-packages/quasarr/downloads/__init__.py
+COPY quasarr/search/__init__.py /usr/lib/python3.12/site-packages/quasarr/search/__init__.py
+COPY quasarr/providers/common_functions.py /usr/lib/python3.12/site-packages/quasarr/providers/common_functions.py
+COPY quasarr/providers/url_functions.py /usr/lib/python3.12/site-packages/quasarr/providers/url_functions.py
+COPY quasarr/__init__.py /usr/lib/python3.12/site-packages/quasarr/__init__.py
+COPY quasarr/storage/config.py /usr/lib/python3.12/site-packages/quasarr/storage/config.py
+COPY quasarr/api/captcha/__init__.py /usr/lib/python3.12/site-packages/quasarr/api/captcha/__init__.py
+COPY quasarr/providers/sessions/dl.py /usr/lib/python3.12/site-packages/quasarr/providers/sessions/dl.py
+
+# volumes and ports
+VOLUME /config
+EXPOSE 8080
+ENV PYTHONUNBUFFERED=1
+ENV DOCKER="true"
+ENV INTERNAL_ADDRESS=""
+ENV EXTERNAL_ADDRESS=""
+ENV DISCORD=""
+ENV HOSTNAMES=""
+
+# Data-load.me specific environment variables
+ENV DL_USER=""
+ENV DL_PASSWORD=""
+ENV DL_COOKIES=""
+
+ENTRYPOINT ["sh", "-c", "quasarr --port=8080 --internal_address=$INTERNAL_ADDRESS --external_address=$EXTERNAL_ADDRESS --discord=$DISCORD --hostnames=$HOSTNAMES"] 
