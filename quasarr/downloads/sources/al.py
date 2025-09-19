@@ -15,6 +15,7 @@ from quasarr.downloads.linkcrypters.al import decrypt_content, solve_captcha
 from quasarr.providers.log import info, debug
 from quasarr.providers.sessions.al import retrieve_and_validate_session, invalidate_session, unwrap_flaresolverr_body, \
     fetch_via_flaresolverr, fetch_via_requests_session
+from quasarr.providers.statistics import StatsHelper
 
 hostname = "al"
 
@@ -47,6 +48,93 @@ def roman_to_int(r: str) -> int:
             total += val
         prev = val
     return total
+
+
+def extract_season_from_synonyms(soup):
+    """
+    Returns the first season found as "Season N" in the Synonym(s) <td>, or None.
+    Only scans the synonyms cell—no fallback to whole document.
+    """
+    syn_td = None
+    for tr in soup.select('tr'):
+        th = tr.find('th')
+        if th and 'synonym' in th.get_text(strip=True).lower():
+            syn_td = tr.find('td')
+            break
+
+    if not syn_td:
+        return None
+
+    text = syn_td.get_text(" ", strip=True)
+
+    synonym_season_patterns = [
+        re.compile(r"\b(?:Season|Staffel)\s*0?(\d+)\b", re.IGNORECASE),
+        re.compile(r"\b0?(\d+)(?:st|nd|rd|th)\s+Season\b", re.IGNORECASE),
+        re.compile(r"\b(\d+)\.\s*Staffel\b", re.IGNORECASE),
+        re.compile(r"\bS0?(\d+)\b", re.IGNORECASE),  # S02, s2, etc.
+        re.compile(r"\b([IVXLCDM]+)\b(?=\s*$)"),  # uppercase Roman at end
+    ]
+
+    for pat in synonym_season_patterns:
+        m = pat.search(text)
+        if not m:
+            continue
+
+        tok = m.group(0)
+        # Digit match → extract number
+        dm = re.search(r"(\d+)", tok)
+        if dm:
+            return int(dm.group(1))
+        # Uppercase Roman → convert & return
+        if tok.isupper() and re.fullmatch(r"[IVXLCDM]+", tok):
+            return roman_to_int(tok)
+
+    return None
+
+
+def find_season_in_release_notes(soup):
+    """
+    Iterates through all <tr> rows with a "Release Notes" <th> (case-insensitive).
+    Returns the first season number found as an int, or None if not found.
+    """
+
+    patterns = [
+        re.compile(r"\b(?:Season|Staffel)\s*0?(\d+)\b", re.IGNORECASE),
+        re.compile(r"\b0?(\d+)(?:st|nd|rd|th)\s+Season\b", re.IGNORECASE),
+        re.compile(r"\b(\d+)\.\s*Staffel\b", re.IGNORECASE),
+        re.compile(r"\bS(?:eason)?0?(\d+)\b", re.IGNORECASE),
+        re.compile(r"\b([IVXLCDM]+)\b(?=\s*$)"),  # uppercase Roman at end
+    ]
+
+    for tr in soup.select('tr'):
+        th = tr.find('th')
+        if not th:
+            continue
+
+        header = th.get_text(strip=True)
+        if 'release ' not in header.lower():  # release notes or release anmerkungen
+            continue
+
+        td = tr.find('td')
+        if not td:
+            continue
+
+        content = td.get_text(' ', strip=True)
+        for pat in patterns:
+            m = pat.search(content)
+            if not m:
+                continue
+
+            token = m.group(1)
+            # Roman numeral detection only uppercase
+            if pat.pattern.endswith('(?=\\s*$)'):
+                if token.isupper():
+                    return roman_to_int(token)
+                else:
+                    continue
+            return int(token)
+
+    return None
 
 
 def extract_season_number_from_title(page_title, release_type, release_title=""):
@@ -169,7 +257,8 @@ def parse_info_from_feed_entry(block, series_page_title, release_type) -> Releas
     )
 
 
-def parse_info_from_download_item(tab, page_title=None, release_type=None, requested_episode=None) -> ReleaseInfo:
+def parse_info_from_download_item(tab, content, page_title=None, release_type=None,
+                                  requested_episode=None) -> ReleaseInfo:
     """
     Parse a BeautifulSoup 'tab' from a download item into ReleaseInfo.
     """
@@ -258,7 +347,11 @@ def parse_info_from_download_item(tab, page_title=None, release_type=None, reque
         release_group = ""
 
     # determine season
-    season_num = extract_season_number_from_title(page_title, release_type, release_title=release_title)
+    season_num = extract_season_from_synonyms(content)
+    if not season_num:
+        season_num = find_season_in_release_notes(content)
+    if not season_num:
+        season_num = extract_season_number_from_title(page_title, release_type, release_title=release_title)
 
     # check if season part info is present
     season_part: Optional[int] = None
@@ -400,7 +493,7 @@ def check_release(shared_state, details_html, release_id, title, episode_in_titl
             else:
                 release_type = "movie"
 
-            release_info = parse_info_from_download_item(tab, page_title=page_title, release_type=release_type,
+            release_info = parse_info_from_download_item(tab, soup, page_title=page_title, release_type=release_type,
                                                          requested_episode=episode_in_title)
             real_title = release_info.release_title
             if real_title:
@@ -409,8 +502,9 @@ def check_release(shared_state, details_html, release_id, title, episode_in_titl
                     return real_title, release_id
             else:
                 # Overwrite values so guessing the title only applies the requested episode
-                release_info.episode_min = int(episode_in_title)
-                release_info.episode_max = int(episode_in_title)
+                if episode_in_title:
+                    release_info.episode_min = int(episode_in_title)
+                    release_info.episode_max = int(episode_in_title)
 
                 guessed_title = guess_title(shared_state, page_title, release_info)
                 if guessed_title and guessed_title.lower() != title.lower():
@@ -435,7 +529,8 @@ def extract_episode(title: str) -> int | None:
     return None
 
 
-def get_al_download_links(shared_state, url, mirror, title, release_id):
+def get_al_download_links(shared_state, url, mirror, title,
+                          release_id):  # signature cant align with other download link functions!
     al = shared_state.values["config"]("Hostnames").get(hostname)
 
     sess = retrieve_and_validate_session(shared_state)
@@ -485,6 +580,7 @@ def get_al_download_links(shared_state, url, mirror, title, release_id):
         status = result.get("status_code")
         if not status == 200:
             info(f"FlareSolverr returned HTTP {status} for captcha request")
+            StatsHelper(shared_state).increment_failed_decryptions_automatic()
             return {}
         else:
             text = result.get("text", "")
@@ -492,6 +588,7 @@ def get_al_download_links(shared_state, url, mirror, title, release_id):
                 response_json = result["json"]
             except ValueError:
                 info(f"Unexpected response when initiating captcha: {text}")
+                StatsHelper(shared_state).increment_failed_decryptions_automatic()
                 return {}
 
             code = response_json.get("code", "")
@@ -547,6 +644,7 @@ def get_al_download_links(shared_state, url, mirror, title, release_id):
                                     break
                                 else:
                                     info(f"CAPTCHA was solved, but no links are available for the selection!")
+                                    StatsHelper(shared_state).increment_failed_decryptions_automatic()
                                     return {}
                             elif message == "cnl_login":
                                 info('Login expired, re-creating session...')
@@ -574,6 +672,7 @@ def get_al_download_links(shared_state, url, mirror, title, release_id):
                     f"Code: {code}, Message: {message}"
                 )
                 invalidate_session(shared_state)
+                StatsHelper(shared_state).increment_failed_decryptions_automatic()
                 return {}
 
             try:
@@ -584,6 +683,12 @@ def get_al_download_links(shared_state, url, mirror, title, release_id):
     except Exception as e:
         info(f"Error loading AL download: {e}")
         invalidate_session(shared_state)
+
+    success = bool(links)
+    if success:
+        StatsHelper(shared_state).increment_captcha_decryptions_automatic()
+    else:
+        StatsHelper(shared_state).increment_failed_decryptions_automatic()
 
     return {
         "links": links,

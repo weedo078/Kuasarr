@@ -101,7 +101,7 @@ def run():
         supported_hostnames = extract_allowed_keys(Config._DEFAULT_CONFIG, 'Hostnames')
         shared_state.update("sites", [key.upper() for key in supported_hostnames])
         shared_state.update("user_agent",
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
         shared_state.update("helper_active", False)
 
         print(f'Config path: "{config_path}"')
@@ -125,7 +125,8 @@ def run():
                     if results:
                         hostnames = Config('Hostnames')
                         for shorthand, hostname in results.items():
-                            valid_domain = shared_state.extract_valid_hostname(hostname, shorthand)
+                            domain_check = shared_state.extract_valid_hostname(hostname, shorthand)
+                            valid_domain = domain_check.get('domain', None)
                             if valid_domain:
                                 hostnames.save(shorthand, hostname)
                                 extracted_hostnames += 1
@@ -203,18 +204,9 @@ def run():
             print("No Discord Webhook URL provided")
         shared_state.update("discord", discord_url)
 
-        # Initialize DL session if configured
-        dl = Config('Hostnames').get('dl')
-        if dl:
-            try:
-                from quasarr.downloads.sources.dl import startup_initialize_session
-                startup_initialize_session(shared_state)
-            except Exception as e:
-                info(f"DL session initialization failed: {e}")
-
         print("\n===== API Information =====")
         print('Setup instructions: "https://github.com/rix1337/Quasarr?tab=readme-ov-file#instructions"')
-        print(f'URL: "{shared_state.values["internal_address"]}"')
+        print(f'URL: "{shared_state.values['internal_address']}"')
         print(f'API key: "{api_key}" (without quotes)')
 
         if external_address != internal_address:
@@ -227,7 +219,7 @@ def run():
         protected = shared_state.get_db("protected").retrieve_all_titles()
         if protected:
             package_count = len(protected)
-            info(f'CAPTCHA-Solution required for {package_count} package{"s" if package_count > 1 else ""} at: '
+            info(f'CAPTCHA-Solution required for {package_count} package{'s' if package_count > 1 else ''} at: '
                  f'"{shared_state.values["external_address"]}/captcha"!')
 
         jdownloader = multiprocessing.Process(

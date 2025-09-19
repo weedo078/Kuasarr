@@ -10,6 +10,7 @@ from quasarr.downloads import fail
 from quasarr.providers import shared_state
 from quasarr.providers.log import info
 from quasarr.providers.notifications import send_discord_message
+from quasarr.providers.statistics import StatsHelper
 
 
 def setup_sponsors_helper_routes(app):
@@ -23,27 +24,40 @@ def setup_sponsors_helper_routes(app):
             protected = shared_state.get_db("protected").retrieve_all_titles()
             if not protected:
                 return abort(404, "No encrypted packages found")
-            else:
-                package = protected[0]
-                package_id = package[0]
+
+            # Find the first package without a "session" key
+            selected_package = None
+            for package in protected:
                 data = json.loads(package[1])
-                title = data["title"]
-                links = data["links"]
-                mirror = None if (mirror := data.get('mirror')) == "None" else mirror
-                password = data["password"]
+                if "session" not in data:
+                    selected_package = (package[0], data)
+                    break
+
+            if not selected_package:
+                return abort(404, "No valid packages without session found")
+
+            package_id, data = selected_package
+            title = data["title"]
+            links = data["links"]
+            mirror = None if (mirror := data.get('mirror')) == "None" else mirror
+            password = data["password"]
+
+            rapid = [ln for ln in links if "rapidgator" in ln[1].lower()]
+            others = [ln for ln in links if "rapidgator" not in ln[1].lower()]
+            prioritized_links = rapid + others
 
             return {
                 "to_decrypt": {
                     "name": title,
                     "id": package_id,
-                    "url": links,
+                    "url": prioritized_links,
                     "mirror": mirror,
                     "password": password,
                     "max_attempts": 3
                 }
             }
-        except:
-            return abort(500, "Failed")
+        except Exception as e:
+            return abort(500, str(e))
 
     @app.post("/sponsors_helper/api/to_download/")
     def to_download_api():
@@ -59,6 +73,8 @@ def setup_sponsors_helper_routes(app):
             if download_links:
                 downloaded = shared_state.download_package(download_links, title, password, package_id)
                 if downloaded:
+                    StatsHelper(shared_state).increment_package_with_links(download_links)
+                    StatsHelper(shared_state).increment_captcha_decryptions_automatic()
                     shared_state.get_db("protected").delete(package_id)
                     send_discord_message(shared_state, title=title, case="solved")
                     info(f"Download successfully started for {title}")
@@ -69,12 +85,55 @@ def setup_sponsors_helper_routes(app):
         except Exception as e:
             info(f"Error decrypting: {e}")
 
-        return abort(500, "Failed")
+        StatsHelper(shared_state).increment_failed_decryptions_automatic()
+        return abort(500, "Failed")  #
+
+    @app.post("/sponsors_helper/api/to_replace/")
+    def to_replace_api():
+        try:
+            data = request.json
+            name = data.get('name')
+            package_id = data.get('package_id')
+            password = data.get('password')
+            replace_url = data.get('replace_url')
+            mirror = data.get('mirror')
+            session = data.get('session')
+
+            if not all([name, package_id, replace_url, mirror, session]):
+                info("Missing required replacement data")
+                return {"error": "Missing required replacement data"}, 400
+
+            if password is None:
+                password = ""
+
+            blob = json.dumps(
+                {
+                    "title": name,
+                    "links": [replace_url, mirror],
+                    "size_mb": 0,
+                    "password": password,
+                    "mirror": mirror,
+                    "session": session
+                })
+
+            shared_state.get_db("protected").update_store(package_id, blob)
+
+            info(f"Another CAPTCHA solution is required for {mirror} link: {replace_url}")
+
+            StatsHelper(shared_state).increment_captcha_decryptions_automatic()
+
+            return f"Replacement link stored for {name}"
+
+        except Exception as e:
+            StatsHelper(shared_state).increment_failed_decryptions_automatic()
+            info(f"Error handling replacement: {e}")
+            return {"error": str(e)}, 500
 
     @app.delete("/sponsors_helper/api/to_failed/")
-    @app.delete("/sponsors_helper/api/to_delete/")
     def move_to_failed_api():
         try:
+            StatsHelper(shared_state).increment_failed_decryptions_automatic()
+
             data = request.json
             package_id = data.get('package_id')
 

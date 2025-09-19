@@ -13,9 +13,9 @@ from bs4 import BeautifulSoup
 
 from quasarr.downloads.sources.al import (guess_title,
                                           parse_info_from_feed_entry, parse_info_from_download_item)
-from quasarr.providers.sessions.al import invalidate_session, fetch_via_requests_session
 from quasarr.providers.imdb_metadata import get_localized_title
 from quasarr.providers.log import info, debug
+from quasarr.providers.sessions.al import invalidate_session, fetch_via_requests_session
 
 hostname = "al"
 supported_mirrors = ["rapidgator", "ddownload"]
@@ -26,29 +26,81 @@ def convert_to_rss_date(date_str: str) -> str:
     return parsed.strftime("%a, %d %b %Y %H:%M:%S +0000")
 
 
+import re
+from datetime import datetime, timedelta
+
+
+def convert_to_rss_date(date_str: str) -> str:
+    # First try to parse relative dates (German and English)
+    parsed_date = parse_relative_date(date_str)
+    if parsed_date:
+        return parsed_date.strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+    # Fall back to absolute date parsing
+    try:
+        parsed = datetime.strptime(date_str, "%d.%m.%Y - %H:%M")
+        return parsed.strftime("%a, %d %b %Y %H:%M:%S +0000")
+    except ValueError:
+        # If parsing fails, return the original string or handle as needed
+        raise ValueError(f"Could not parse date: {date_str}")
+
+
 def parse_relative_date(raw: str) -> datetime | None:
-    m = re.match(r"vor\s+(\d+)\s+(\w+)", raw)
-    if not m:
-        return None
-    num = int(m.group(1))
-    unit = m.group(2).lower()
-    if unit.startswith("sekunde"):
-        delta = timedelta(seconds=num)
-    elif unit.startswith("minute"):
-        delta = timedelta(minutes=num)
-    elif unit.startswith("stunde"):
-        delta = timedelta(hours=num)
-    elif unit.startswith("tag"):
-        delta = timedelta(days=num)
-    elif unit.startswith("woche"):
-        delta = timedelta(weeks=num)
-    elif unit.startswith("monat"):
-        delta = timedelta(days=30 * num)
-    elif unit.startswith("jahr"):
-        delta = timedelta(days=365 * num)
-    else:
-        return None
-    return datetime.utcnow() - delta
+    # German pattern: "vor X Einheit(en)"
+    german_match = re.match(r"vor\s+(\d+)\s+(\w+)", raw, re.IGNORECASE)
+    if german_match:
+        num = int(german_match.group(1))
+        unit = german_match.group(2).lower()
+
+        if unit.startswith("sekunde"):
+            delta = timedelta(seconds=num)
+        elif unit.startswith("minute"):
+            delta = timedelta(minutes=num)
+        elif unit.startswith("stunde"):
+            delta = timedelta(hours=num)
+        elif unit.startswith("tag"):
+            delta = timedelta(days=num)
+        elif unit.startswith("woche"):
+            delta = timedelta(weeks=num)
+        elif unit.startswith("monat"):
+            delta = timedelta(days=30 * num)
+        elif unit.startswith("jahr"):
+            delta = timedelta(days=365 * num)
+        else:
+            return None
+
+        return datetime.utcnow() - delta
+
+    # English pattern: "X Unit(s) ago"
+    english_match = re.match(r"(\d+)\s+(\w+)\s+ago", raw, re.IGNORECASE)
+    if english_match:
+        num = int(english_match.group(1))
+        unit = english_match.group(2).lower()
+
+        # Remove plural 's' if present
+        if unit.endswith('s'):
+            unit = unit[:-1]
+
+        if unit.startswith("second"):
+            delta = timedelta(seconds=num)
+        elif unit.startswith("minute"):
+            delta = timedelta(minutes=num)
+        elif unit.startswith("hour"):
+            delta = timedelta(hours=num)
+        elif unit.startswith("day"):
+            delta = timedelta(days=num)
+        elif unit.startswith("week"):
+            delta = timedelta(weeks=num)
+        elif unit.startswith("month"):
+            delta = timedelta(days=30 * num)
+        elif unit.startswith("year"):
+            delta = timedelta(days=365 * num)
+        else:
+            return None
+
+        return datetime.utcnow() - delta
+
+    return None
 
 
 def extract_size(text):
@@ -71,6 +123,10 @@ def get_release_id(tag):
 def al_feed(shared_state, start_time, request_from, mirror=None):
     releases = []
     host = shared_state.values["config"]("Hostnames").get(hostname)
+
+    if not "arr" in request_from.lower():
+        debug(f'Skipping {request_from} search on "{hostname.upper()}" (unsupported media type)!')
+        return releases
 
     if "Radarr" in request_from:
         wanted_type = "movie"
@@ -194,6 +250,10 @@ def al_search(shared_state, start_time, request_from, search_string,
     releases = []
     host = shared_state.values["config"]("Hostnames").get(hostname)
 
+    if not "arr" in request_from.lower():
+        debug(f'Skipping {request_from} search on "{hostname.upper()}" (unsupported media type)!')
+        return releases
+
     if "Radarr" in request_from:
         valid_type = "movie"
     else:
@@ -255,7 +315,7 @@ def al_search(shared_state, start_time, request_from, search_string,
 
             sanitized_search_string = shared_state.sanitize_string(search_string)
             sanitized_title = shared_state.sanitize_string(name)
-            if not re.search(rf'\b{re.escape(sanitized_search_string)}\b', sanitized_title):
+            if not sanitized_search_string in sanitized_title:
                 debug(f"Search string '{search_string}' doesn't match '{name}'")
                 continue
             debug(f"Matched search string '{search_string}' with result '{name}'")
@@ -306,7 +366,7 @@ def al_search(shared_state, start_time, request_from, search_string,
             for tab in download_tabs:
                 release_id += 1
 
-                release_info = parse_info_from_download_item(tab, page_title=title,
+                release_info = parse_info_from_download_item(tab, content, page_title=title,
                                                              release_type=valid_type, requested_episode=episode)
 
                 # Parse date

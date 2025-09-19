@@ -1,0 +1,48 @@
+{
+  "cookies": {
+    "xf_user": "53371%2CnXQhAjYyUDN2I7ZK575ZVel1AfwY2a_7co5SGf5i",
+    "_token2": "1",
+    "_token1": "1",
+    "_sl": "1"
+  },
+  "metadata": {
+    "domain": "data-load.me",
+    "extracted_at": "2025-06-11T18:42:56.650007",
+    "total_cookies": 4,
+    "cookie_details": {
+      "xf_user": {
+        "value": "53371%2CnXQhAjYyUDN2I7ZK575ZVel1AfwY2a_7co5SGf5i",
+        "domain": "www.data-load.me",
+        "path": "/",
+        "expires": 1781196145,
+        "secure": true,
+        "httponly": true
+      },
+      "_token2": {
+        "value": "1",
+        "domain": "www.data-load.me",
+        "path": "/",
+        "expires": 1738766597,
+        "secure": false,
+        "httponly": false
+      },
+      "_token1": {
+        "value": "1",
+        "domain": "www.data-load.me",
+        "path": "/",
+        "expires": 1738764965,
+        "secure": false,
+        "httponly": false
+      },
+      "_sl": {
+        "value": "1",
+        "domain": "www.data-load.me",
+        "path": "/",
+        "expires": 1730848400,
+        "secure": false,
+        "httponly": false
+      }
+    },
+    "source": "wsl_extractor"
+  }
+}

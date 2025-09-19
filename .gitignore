@@ -3,33 +3,14 @@
 # Python
 *.pyc
 *.bak
-*.spec
-file_version_info.txt
-version.txt
-__pycache__
 
 # Build Tools
-build
-dist
 venv
-*.egg-info
 
 # PyCharm
 .idea
-.eggs
 
 # Quasarr
 *.conf
 *.db
 *.ini
-
-# DL Integration - Sensitive Data
-config/
-config.old/
-config.newold/
-tests_and_debug/
-dl_cookies.json
-*.json
-
-# Virtual Environment
-quasarr_venv/

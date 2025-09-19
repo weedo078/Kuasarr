@@ -27,8 +27,8 @@ class Config(object):
         ],
         'Hostnames': [
             ("al", "secret", ""),
+            ("by", "secret", ""),
             ("dd", "secret", ""),
-            ("dl", "secret", ""),
             ("dt", "secret", ""),
             ("dw", "secret", ""),
             ("fx", "secret", ""),
@@ -66,10 +66,10 @@ class Config(object):
                 self._section) or self._set_default_config(self._section)
             self.__config__ = self._read_config(self._section)
         except configparser.DuplicateSectionError:
-            print('Doppelte Sektion in der Konfigurationsdatei.')
+            print('Duplicate Section in Config File')
             raise
-        except:
-            print('Ein unbekannter Fehler in der Konfigurationsdatei ist aufgetreten.')
+        except Exception as e:
+            print(f'Unknown error while reading config file: {e}')
             raise
 
     def _set_default_config(self, section):

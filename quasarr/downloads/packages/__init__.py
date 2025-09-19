@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Quasarr
+# Project by https://github.com/rix1337
+
 import json
 from collections import defaultdict
 from urllib.parse import urlparse
@@ -225,6 +229,8 @@ def get_packages(shared_state):
                     package_id = package["comment"]
                     if "movies" in package_id:
                         category = "movies"
+                    elif "docs" in package_id:
+                        category = "docs"
                     else:
                         category = "tv"
                 except TypeError:
@@ -256,6 +262,8 @@ def get_packages(shared_state):
                     package_id = package["comment"]
                     if "movies" in package_id:
                         category = "movies"
+                    elif "docs" in package_id:
+                        category = "docs"
                     else:
                         category = "tv"
                 except TypeError:
@@ -270,6 +278,8 @@ def get_packages(shared_state):
                     package_id = package["package_id"]
                     if "movies" in package_id:
                         category = "movies"
+                    elif "docs" in package_id:
+                        category = "docs"
                     else:
                         category = "tv"
                 except TypeError:
@@ -279,15 +289,23 @@ def get_packages(shared_state):
 
             try:
                 if package_id:
+                    mb_left = int(mb_left)
+                    mb = int(mb)
+                    try:
+                        percentage = int(100 * (mb - mb_left) / mb)
+                    except ZeroDivisionError:
+                        percentage = 0
+
                     downloads["queue"].append({
                         "index": queue_index,
                         "nzo_id": package_id,
                         "priority": "Normal",
                         "filename": name,
                         "cat": category,
-                        "mbleft": int(mb_left),
-                        "mb": int(mb),
+                        "mbleft": mb_left,
+                        "mb": mb,
                         "status": "Downloading",
+                        "percentage": percentage,
                         "timeleft": time_left,
                         "type": package_type,
                         "uuid": package_uuid
@@ -307,6 +325,8 @@ def get_packages(shared_state):
                 package_id = package["comment"]
                 if "movies" in package_id:
                     category = "movies"
+                elif "docs" in package_id:
+                    category = "docs"
                 else:
                     category = "tv"
             except TypeError:
@@ -328,6 +348,7 @@ def get_packages(shared_state):
                 "nzo_id": package_id,
                 "name": name,
                 "bytes": int(size),
+                "percentage": 100,
                 "type": "downloader",
                 "uuid": package["uuid"]
             })
