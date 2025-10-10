@@ -27,7 +27,7 @@ Tell Quasarr which sites to search for releases. It requires at least one valid 
 > - By default, Quasarr does **not** know which sites to scrape for download links.  
 > - The setup will guide you through the process of providing valid hostnames for Quasarr to scrape.  
 > - Do **not** ask for help here if you do not know which hostnames to use. Picking them is solely your responsibility.  
-> - You may check sites like [Pastebin](https://pastebin.com/search?q=hostnames+quasarr) for user‑submitted suggestions.
+> - You may check sites like [Pastebin](https://pastebin.com/53CUYDqf) for user‑submitted suggestions.
 
 ---
 
