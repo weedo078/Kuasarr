@@ -28,7 +28,15 @@ Tags:
 - `v1.16.5-dl.1`
 (siehe [Tags-Übersicht](https://hub.docker.com/r/weedo078/quasarr-dl/tags))
 
-Hinweis: Hostname‑Konfiguration, JDownloader‑Anbindung, Radarr/Sonarr‑Setup etc. erfolgen wie im Original beschrieben (siehe Link oben).
+## Direkte‑Link‑Funktion (Manual Link Intake)
+
+- UI: Aufruf über `/manual-links` im laufenden Quasarr (neuen Job anlegen, Links einfügen, optional Download‑Pfad setzen, starten).
+- API (JSON):
+  - `POST /api/manual-links` → { links: ["https://…"], download_path: "/downloads/...", notes: "..." }
+  - `POST /api/manual-links/<job_id>/start` → Verarbeitung starten
+  - `GET /api/manual-links/<job_id>` → Job + Events abrufen
+
+Hinweis: Unterstützt Zielordner via `destination_folder`/`download_path` und integriert sich in den bestehenden Download‑Flow (inkl. CAPTCHA‑Handling).
 
 ## Lizenz und Attribution
 
