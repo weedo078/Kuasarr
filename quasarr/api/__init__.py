@@ -10,6 +10,7 @@ from quasarr.api.captcha import setup_captcha_routes
 from quasarr.api.config import setup_config
 from quasarr.api.sponsors_helper import setup_sponsors_helper_routes
 from quasarr.api.statistics import setup_statistics
+from quasarr.api.manual_links import setup_manual_link_routes
 from quasarr.providers import shared_state
 from quasarr.providers.html_templates import render_button, render_centered_html
 from quasarr.providers.web_server import Server
@@ -25,6 +26,7 @@ def get_api(shared_state_dict, shared_state_lock):
     setup_captcha_routes(app)
     setup_config(app, shared_state)
     setup_statistics(app, shared_state)
+    setup_manual_link_routes(app)
     setup_sponsors_helper_routes(app)
 
     @app.get('/')
@@ -104,6 +106,7 @@ def get_api(shared_state_dict, shared_state_lock):
             <h2>🔧 Quick Actions</h2>
             <p><button class="btn-primary" onclick="location.href='/hostnames'">Update Hostnames</button></p>
             <p><button class="btn-primary" onclick="location.href='/statistics'">View Statistics</button></p>
+            <p><button class="btn-primary" onclick="location.href='/manual-links'">Manual Link Intake</button></p>
         </div>
 
         <style>

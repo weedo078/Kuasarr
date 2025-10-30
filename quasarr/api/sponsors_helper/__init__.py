@@ -71,7 +71,22 @@ def setup_sponsors_helper_routes(app):
             info(f"Received {len(download_links)} download links for {title}")
 
             if download_links:
-                downloaded = shared_state.download_package(download_links, title, password, package_id)
+                destination_path = None
+                stored_blob = shared_state.get_db("protected").retrieve(package_id)
+                if stored_blob:
+                    try:
+                        stored_data = json.loads(stored_blob)
+                        destination_path = stored_data.get("destination_path")
+                    except json.JSONDecodeError:
+                        destination_path = None
+
+                downloaded = shared_state.download_package(
+                    download_links,
+                    title,
+                    password,
+                    package_id,
+                    destination_folder=destination_path,
+                )
                 if downloaded:
                     StatsHelper(shared_state).increment_package_with_links(download_links)
                     StatsHelper(shared_state).increment_captcha_decryptions_automatic()
@@ -106,6 +121,17 @@ def setup_sponsors_helper_routes(app):
             if password is None:
                 password = ""
 
+            existing_blob = shared_state.get_db("protected").retrieve(package_id)
+            destination_path = None
+            manual_job_id = None
+            if existing_blob:
+                try:
+                    existing_data = json.loads(existing_blob)
+                    destination_path = existing_data.get("destination_path")
+                    manual_job_id = existing_data.get("manual_job_id")
+                except json.JSONDecodeError:
+                    destination_path = None
+
             blob = json.dumps(
                 {
                     "title": name,
@@ -113,7 +139,9 @@ def setup_sponsors_helper_routes(app):
                     "size_mb": 0,
                     "password": password,
                     "mirror": mirror,
-                    "session": session
+                    "session": session,
+                    "destination_path": destination_path,
+                    "manual_job_id": manual_job_id,
                 })
 
             shared_state.get_db("protected").update_store(package_id, blob)

@@ -24,14 +24,21 @@ from quasarr.providers.statistics import StatsHelper
 
 
 def handle_unprotected(shared_state, title, password, package_id, imdb_id, url,
-                       mirror=None, size_mb=None, links=None, func=None, label=""):
+                       mirror=None, size_mb=None, links=None, func=None, label="",
+                       destination_folder=None):
     if func:
         links = func(shared_state, url, mirror, title)
 
     if links:
         info(f"Decrypted {len(links)} download links for {title}")
         send_discord_message(shared_state, title=title, case="unprotected", imdb_id=imdb_id, source=url)
-        added = shared_state.download_package(links, title, password, package_id)
+        added = shared_state.download_package(
+            links,
+            title,
+            password,
+            package_id,
+            destination_folder=destination_folder,
+        )
         if not added:
             fail(title, package_id, shared_state,
                  reason=f'Failed to add {len(links)} links for "{title}" to linkgrabber')
@@ -46,12 +53,20 @@ def handle_unprotected(shared_state, title, password, package_id, imdb_id, url,
 
 
 def handle_protected(shared_state, title, password, package_id, imdb_id, url,
-                     mirror=None, size_mb=None, func=None, label=""):
+                     mirror=None, size_mb=None, func=None, label="", destination_folder=None):
     links = func(shared_state, url, mirror, title)
     if links:
-        info(f'CAPTCHA-Solution required for "{title}" at: "{shared_state.values['external_address']}/captcha"')
+        info(
+            f"CAPTCHA-Solution required for \"{title}\" at: \"{shared_state.values['external_address']}/captcha\""
+        )
         send_discord_message(shared_state, title=title, case="captcha", imdb_id=imdb_id, source=url)
-        blob = json.dumps({"title": title, "links": links, "size_mb": size_mb, "password": password})
+        blob = json.dumps({
+            "title": title,
+            "links": links,
+            "size_mb": size_mb,
+            "password": password,
+            "destination_folder": destination_folder,
+        })
         shared_state.values["database"]("protected").update_store(package_id, blob)
     else:
         fail(title, package_id, shared_state,
@@ -60,7 +75,7 @@ def handle_protected(shared_state, title, password, package_id, imdb_id, url,
     return {"success": True, "title": title}
 
 
-def handle_al(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb):
+def handle_al(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
     data = get_al_download_links(shared_state, url, mirror, title, password)
     links = data.get("links", [])
     title = data.get("title", title)
@@ -68,11 +83,12 @@ def handle_al(shared_state, title, password, package_id, imdb_id, url, mirror, s
     return handle_unprotected(
         shared_state, title, password, package_id, imdb_id, url,
         links=links,
-        label='AL'
+        label='AL',
+        destination_folder=destination_folder,
     )
 
 
-def handle_sf(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb):
+def handle_sf(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
     if url.startswith(f"https://{shared_state.values['config']('Hostnames').get('sf')}/external"):
         url = resolve_sf_redirect(url, shared_state.values["user_agent"])
     elif url.startswith(f"https://{shared_state.values['config']('Hostnames').get('sf')}/"):
@@ -91,11 +107,12 @@ def handle_sf(shared_state, title, password, package_id, imdb_id, url, mirror, s
         mirror=mirror,
         size_mb=size_mb,
         func=lambda ss, u, m, t: [[url, "filecrypt"]],
-        label='SF'
+        label='SF',
+        destination_folder=destination_folder,
     )
 
 
-def handle_sl(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb):
+def handle_sl(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
     data = get_sl_download_links(shared_state, url, mirror, title)
     links = data.get("links")
     if not imdb_id:
@@ -103,11 +120,12 @@ def handle_sl(shared_state, title, password, package_id, imdb_id, url, mirror, s
     return handle_unprotected(
         shared_state, title, password, package_id, imdb_id, url,
         links=links,
-        label='SL'
+        label='SL',
+        destination_folder=destination_folder,
     )
 
 
-def handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb):
+def handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
     data = get_wd_download_links(shared_state, url, mirror, title)
     links = data.get("links")
     if not links:
@@ -122,7 +140,7 @@ def handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, s
         if status == "success":
             return handle_unprotected(
                 shared_state, title, password, package_id, imdb_id, url,
-                links=links, label='WD'
+                links=links, label='WD', destination_folder=destination_folder
             )
         else:
             fail(title, package_id, shared_state,
@@ -134,11 +152,13 @@ def handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, s
         mirror=mirror,
         size_mb=size_mb,
         func=lambda ss, u, m, t: links,
-        label='WD'
+        label='WD',
+        destination_folder=destination_folder,
     )
 
 
-def download(shared_state, request_from, title, url, mirror, size_mb, password, imdb_id=None):
+def download(shared_state, request_from, title, url, mirror, size_mb, password, imdb_id=None,
+             destination_folder=None, manual_job_id=None):
     if "lazylibrarian" in request_from.lower():
         category = "docs"
     elif "radarr" in request_from.lower():
@@ -146,7 +166,10 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
     else:
         category = "tv"
 
-    package_id = f"Quasarr_{category}_{str(hash(title + url)).replace('-', '')}"
+    package_hash = str(hash(title + url)).replace('-', '')
+    if manual_job_id:
+        package_hash = f"{package_hash}_{manual_job_id}"
+    package_id = f"Quasarr_{category}_{package_hash}"
 
     if imdb_id is not None and imdb_id.lower() == "none":
         imdb_id = None
@@ -165,29 +188,94 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
         'WD': config.get("wd")
     }
 
-    handlers = [
-        (flags['AL'], handle_al),
-        (flags['BY'], lambda *a: handle_protected(*a, func=get_by_download_links, label='BY')),
-        (flags['DD'], lambda *a: handle_unprotected(*a, func=get_dd_download_links, label='DD')),
-        (flags['DT'], lambda *a: handle_unprotected(*a, func=get_dt_download_links, label='DT')),
-        (flags['DW'], lambda *a: handle_protected(*a, func=get_dw_download_links, label='DW')),
-        (flags['MB'], lambda *a: handle_protected(*a, func=get_mb_download_links, label='MB')),
-        (flags['NX'], lambda *a: handle_unprotected(*a, func=get_nx_download_links, label='NX')),
-        (flags['SF'], handle_sf),
-        (flags['SL'], handle_sl),
-        (flags['WD'], handle_wd),
-    ]
+    if flags['AL'] and flags['AL'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_al(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
+                        destination_folder=destination_folder)
+        }
 
-    for flag, fn in handlers:
-        if flag and flag.lower() in url.lower():
-            return {"package_id": package_id,
-                    **fn(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb)}
+    if flags['BY'] and flags['BY'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_protected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_by_download_links, label='BY', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['DD'] and flags['DD'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_unprotected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_dd_download_links, label='DD', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['DT'] and flags['DT'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_unprotected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_dt_download_links, label='DT', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['DW'] and flags['DW'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_protected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_dw_download_links, label='DW', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['MB'] and flags['MB'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_protected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_mb_download_links, label='MB', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['NX'] and flags['NX'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_unprotected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_nx_download_links, label='NX', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['SF'] and flags['SF'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_sf(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
+                        destination_folder=destination_folder)
+        }
+
+    if flags['SL'] and flags['SL'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_sl(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
+                        destination_folder=destination_folder)
+        }
+
+    if flags['WD'] and flags['WD'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
+                        destination_folder=destination_folder)
+        }
 
     if "filecrypt" in url.lower():
         return {"package_id": package_id, **handle_protected(
             shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
             func=lambda ss, u, m, t: [[u, "filecrypt"]],
-            label='filecrypt'
+            label='filecrypt',
+            destination_folder=destination_folder,
         )}
 
     info(f'Could not parse URL for "{title}" - "{url}"')

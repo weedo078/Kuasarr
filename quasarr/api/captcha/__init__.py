@@ -12,6 +12,7 @@ from bottle import request, response, redirect
 
 import quasarr.providers.html_images as images
 from quasarr.downloads.linkcrypters.filecrypt import get_filecrypt_links
+from quasarr.downloads import manual_jobs
 from quasarr.downloads.packages import delete_package
 from quasarr.providers import shared_state
 from quasarr.providers.html_templates import render_button, render_centered_html
@@ -65,14 +66,18 @@ def setup_captcha_routes(app):
             others = [ln for ln in links if "rapidgator" not in ln[1].lower()]
             prioritized_links = rapid + others
 
+            destination_folder = data.get("destination_folder")
+
             payload = {
                 "package_id": package_id,
                 "title": title,
                 "password": password,
                 "mirror": desired_mirror,
                 "session": session,
-                "links": prioritized_links
+                "links": prioritized_links,
             }
+            if destination_folder:
+                payload["destination_folder"] = destination_folder
 
             encoded_payload = urlsafe_b64encode(json.dumps(payload).encode()).decode()
 
@@ -148,6 +153,8 @@ def setup_captcha_routes(app):
         password = payload.get("password")
         desired_mirror = payload.get("mirror")
         prioritized_links = payload.get("links")
+        destination_folder = payload.get("destination_folder")
+        destination_folder = payload.get("destination_folder")
 
         if not prioritized_links:
             # No links found, show an error message
@@ -354,6 +361,9 @@ def setup_captcha_routes(app):
 
         links = []
         title = "Unknown Package"
+        destination_folder = None
+        manual_error = None
+        submitted_to_jd = False
         try:
             data = request.json
             token = data.get('token')
@@ -362,6 +372,15 @@ def setup_captcha_routes(app):
             link = data.get('link')
             password = data.get('password')
             mirror = None if (mirror := data.get('mirror')) == "None" else mirror
+
+            if package_id:
+                stored_blob = shared_state.get_db("protected").retrieve(package_id)
+                if stored_blob:
+                    try:
+                        stored_data = json.loads(stored_blob)
+                        destination_folder = stored_data.get("destination_folder")
+                    except Exception:  # pragma: no cover - defensive
+                        destination_folder = None
 
             if token:
                 info(f"Received token: {token}")
@@ -382,7 +401,8 @@ def setup_captcha_routes(app):
                                 "size_mb": 0,
                                 "password": password,
                                 "mirror": mirror,
-                                "session": session
+                                "session": session,
+                                "destination_folder": destination_folder,
                             })
                         shared_state.get_db("protected").update_store(package_id, blob)
                         info(f"Another CAPTCHA solution is required for {mirror} link: {replace_url}")
@@ -392,24 +412,40 @@ def setup_captcha_routes(app):
                         info(f"Decrypted {len(links)} download links for {title}")
                         if not links:
                             raise ValueError("No download links found after decryption")
-                        downloaded = shared_state.download_package(links, title, password, package_id)
+                        downloaded = shared_state.download_package(
+                            links,
+                            title,
+                            password,
+                            package_id,
+                            destination_folder=destination_folder,
+                        )
+                        submitted_to_jd = True
                         if downloaded:
                             StatsHelper(shared_state).increment_package_with_links(links)
                             shared_state.get_db("protected").delete(package_id)
                         else:
                             links = []
-                            raise RuntimeError("Submitting Download to JDownloader failed")
+                            manual_error = "Submitting Download to JDownloader failed"
+                            raise RuntimeError(manual_error)
                 else:
                     raise ValueError("No download links found")
 
         except Exception as e:
             info(f"Error decrypting: {e}")
+            if not manual_error:
+                manual_error = str(e)
 
         success = bool(links)
         if success:
             StatsHelper(shared_state).increment_captcha_decryptions_manual()
         else:
             StatsHelper(shared_state).increment_failed_decryptions_manual()
+
+        if submitted_to_jd and package_id:
+            if success:
+                manual_jobs.update_job_from_package_event(package_id, success=True)
+            else:
+                manual_jobs.update_job_from_package_event(package_id, success=False, error=manual_error)
 
         # Check if there are more CAPTCHAs to solve
         remaining_protected = shared_state.get_db("protected").retrieve_all_titles()
@@ -498,6 +534,8 @@ def setup_captcha_routes(app):
         response.content_type = resp.headers.get('Content-Type', 'text/html')
 
         solution = "You did not solve the CAPTCHA correctly. Please try again."
+        manual_error = None
+        submitted_to_jd = False
         match = re.search(r"top\.location\.href\s*=\s*['\"]([^'\"]+)['\"]", resp.text)
         if match:
             solution = match.group(1)
@@ -519,19 +557,30 @@ def setup_captcha_routes(app):
                         data = json.loads(raw_data)
                         title = data.get("title")
                         password = data.get("password", "")
+                        destination_folder = data.get("destination_folder")
                         links = [download_link]
-                        downloaded = shared_state.download_package(links, title, password, package_id)
+                        downloaded = shared_state.download_package(
+                            links,
+                            title,
+                            password,
+                            package_id,
+                            destination_folder=destination_folder,
+                        )
+                        submitted_to_jd = True
                         if downloaded:
                             StatsHelper(shared_state).increment_package_with_links(links)
                             success = True
                             shared_state.get_db("protected").delete(package_id)
                         else:
-                            raise RuntimeError("Submitting Download to JDownloader failed")
+                            manual_error = "Submitting Download to JDownloader failed"
+                            raise RuntimeError(manual_error)
                     else:
                         info(
                             f"Failed to reach redirect target. Status: {redirect_resp.status_code}, Solution: {solution}")
             except Exception as e:
                 info(f"Error while resolving download link: {e}")
+                if not manual_error:
+                    manual_error = str(e)
         else:
             if resp.url.endswith("404.html"):
                 info("Your IP has been blocked by Filecrypt. Please try again later.")
@@ -542,6 +591,12 @@ def setup_captcha_routes(app):
             StatsHelper(shared_state).increment_captcha_decryptions_manual()
         else:
             StatsHelper(shared_state).increment_failed_decryptions_manual()
+
+        if submitted_to_jd:
+            if success:
+                manual_jobs.update_job_from_package_event(package_id, success=True)
+            else:
+                manual_jobs.update_job_from_package_event(package_id, success=False, error=manual_error)
 
         # Check if there are more CAPTCHAs to solve
         remaining_protected = shared_state.get_db("protected").retrieve_all_titles()

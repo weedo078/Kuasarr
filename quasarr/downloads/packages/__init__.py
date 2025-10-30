@@ -109,7 +109,9 @@ def get_packages(shared_state):
                 "title": data["title"],
                 "urls": data["links"],
                 "size_mb": data["size_mb"],
-                "password": data["password"]
+                "password": data["password"],
+                "destination_path": data.get("destination_path"),
+                "manual_job_id": data.get("manual_job_id"),
             }
 
             packages.append({

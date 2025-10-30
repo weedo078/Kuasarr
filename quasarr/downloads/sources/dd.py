@@ -34,8 +34,9 @@ def get_dd_download_links(shared_state, url, mirror, title): # signature must al
 
     try:
         release_list = []
+        qualities_param = ",".join(qualities)
         for page in range(0, 100, 20):
-            url = f'https://{dd}/index/search/keyword/{title}/qualities/{','.join(qualities)}/from/{page}/search'
+            url = f"https://{dd}/index/search/keyword/{title}/qualities/{qualities_param}/from/{page}/search"
 
             releases_on_page = dd_session.get(url, headers=headers, timeout=10).json()
             if releases_on_page:

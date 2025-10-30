@@ -75,8 +75,9 @@ def dd_search(shared_state, start_time, request_from, search_string="", mirror=N
 
     try:
         release_list = []
+        qualities_param = ",".join(qualities)
         for page in range(0, 100, 20):
-            url = f'https://{dd}/index/search/keyword/{search_string}/qualities/{','.join(qualities)}/from/{page}/search'
+            url = f"https://{dd}/index/search/keyword/{search_string}/qualities/{qualities_param}/from/{page}/search"
 
             releases_on_page = dd_session.get(url, headers=headers, timeout=10).json()
             if releases_on_page:
