@@ -504,7 +504,7 @@ def setup_captcha_routes(app):
             info(f"Redirect URL: {solution}")
             try:
                 redirect_resp = requests.get(solution, headers=headers, cookies=cookies, allow_redirects=True,
-                                             timeout=10)
+                                             timeout=10, verify=False)
                 if "expired" in redirect_resp.text.lower():
                     solution = f"The CAPTCHA session has expired. Deleting package: {package_id}"
                     info(solution)
