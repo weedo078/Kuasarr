@@ -1,45 +1,38 @@
-# Quasarr (DL‑Integration Fork)
+﻿![Kuasarr](Kuasarr.png)
 
-Diese Fork‑Variante ergänzt Quasarr um:
+# Kuasarr (Quasarr Fork)
 
-- DL‑Integration: erweiterter Download‑Flow inkl. Zielordner‑Unterstützung (destination_folder)
-- Direkte‑Link‑Funktion (Manual Link Intake) über eigene API/UI‑Route
+Quasarr fork with additional hosters (e.g. DL, AD), manual link intake, and an open download API. For in-depth documentation please refer to the original project: [rix1337/quasarr](https://github.com/rix1337/quasarr#readme).
 
-Für Funktionsumfang, Einrichtung und alle Details verweise ich auf die Original‑Dokumentation: [Original README von rix1337](https://github.com/rix1337/Quasarr#readme)
+## Quick Start
 
-## Image
-
-Docker Hub: [weedo078/quasarr-dl](https://hub.docker.com/r/weedo078/quasarr-dl)
-
-Beispiel:
+Docker Hub: [weedo078/kuasarr](https://hub.docker.com/r/weedo078/kuasarr)
 
 ```bash
 docker run -d \
-  --name="quasarr-dl" \
+  --name kuasarr \
   -p 8080:8080 \
-  -v /path/to/config/:/config:rw \
-  -e 'INTERNAL_ADDRESS'='http://192.168.0.1:8080' \
-  -e 'EXTERNAL_ADDRESS'='http://192.168.0.1:8080' \
-  weedo078/quasarr-dl:latest
+  -v /path/to/config/:/config \
+  -e INTERNAL_ADDRESS=http://192.168.0.1:8080 \
+  -e EXTERNAL_ADDRESS=http://192.168.0.1:8080 \
+  weedo078/kuasarr:latest
 ```
 
-Tags:
-- `latest`
-- `v1.16.5-dl.1`
-(siehe [Tags-Übersicht](https://hub.docker.com/r/weedo078/quasarr-dl/tags))
+All configuration lives inside `/config/kuasarr.ini`. Hostnames and FlareSolverr can be managed via the Web UI. Available image tags are listed on [Docker Hub](https://hub.docker.com/r/weedo078/kuasarr/tags).
 
-## Direkte‑Link‑Funktion (Manual Link Intake)
+## Key Features
 
-- UI: Aufruf über `/manual-links` im laufenden Quasarr (neuen Job anlegen, Links einfügen, optional Download‑Pfad setzen, starten).
-- API (JSON):
-  - `POST /api/manual-links` → { links: ["https://…"], download_path: "/downloads/...", notes: "..." }
-  - `POST /api/manual-links/<job_id>/start` → Verarbeitung starten
-  - `GET /api/manual-links/<job_id>` → Job + Events abrufen
+- **Manual Link Intake**: Use `/manual-links` in the UI or `POST /api/manual-links` to submit links, optionally set a destination path, and start the job.
+- **CaptchaHelper Parallel Mode**: Toggle `[CapHa]` in `kuasarr.ini` or via env vars (`CAPHA_PARALLEL_MODE`, `CAPHA_PARALLEL_MAX`) to process multiple handler jobs simultaneously.
+- **Hoster Filtering**: Exclude unwanted mirrors directly via the UI.
+- **Encrypted Containers**: Accept Filecrypt/container URLs in the UI, decrypt them, and forward the results to JDownloader.
+- **Search (beta)**: Experimental provider search is available but still under active development and may not return results in every case.
 
-Hinweis: Unterstützt Zielordner via `destination_folder`/`download_path` und integriert sich in den bestehenden Download‑Flow (inkl. CAPTCHA‑Handling).
+Any other functionality (e.g. provider list) matches the Quasarr base and is documented there.
 
-## Lizenz und Attribution
+## License
 
-- Lizenz: MIT (siehe `LICENSE` in diesem Repository)
+- MIT (see `LICENSE`)
 - Copyright (c) 2024 RiX
-- Dieses Projekt ist ein Fork von `rix1337/Quasarr` — Quelle und vollständige Anleitung: [https://github.com/rix1337/Quasarr](https://github.com/rix1337/Quasarr)
+- Fork of [`rix1337/quasarr`](https://github.com/rix1337/quasarr)
+

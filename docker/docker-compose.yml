@@ -1,23 +1,13 @@
 services:
-    quasarr:
-        container_name: 'Quasarr'
+    kuasarr:
+        container_name: 'Kuasarr'
         ports:
             - '8080:8080'
         volumes:
-            - 'C:\Docker\quasarr-config:/config:rw'
+            - 'C:\Docker\kuasarr-config:/config:rw'
             - 'C:\Docker\downloads:/downloads:rw'
         environment:
             - 'INTERNAL_ADDRESS=http://192.168.178.207:8080'
             - 'EXTERNAL_ADDRESS=http://192.168.178.207:8080'
-            
-            
-            # data-load.me Login (optional für Premium-Content)
-            # Entweder Benutzerdaten ODER Cookie-Datei verwenden
-            # - 'DL_USER=ihr_benutzername'
-            # - 'DL_PASSWORD=ihr_passwort'
-            
-            # Cookie-Datei für persistente Sessions (empfohlen)
-            # Speichere die dl_cookies.json vom Desktop in C:\Docker\quasarr-config\
-            - 'DL_COOKIES=/config/dl_cookies.json'
-        image: 'quasarr-dl:1.7.3.43-cookies-fixed'
+        image: 'weedo078/kuasarr:latest'
         restart: unless-stopped

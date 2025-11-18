@@ -1,24 +1,24 @@
-name: Bug report
+﻿name: Bug report
 description: Create a bug report
 body:
   - type: checkboxes
     attributes:
       label: Did you read the README?
-      description: Please read the <a href="https://github.com/rix1337/Quasarr/blob/master/README.md">README</a> first.
+      description: Please read the <a href="https://github.com/rix1337/kuasarr/blob/master/README.md">README</a> first.
       options:
         - label: I have read the README.
           required: true
   - type: checkboxes
     attributes:
       label: Is this an existing issue?
-      description: Check <a href="https://github.com/rix1337/Quasarr/issues?q=is%3Aissue">all issues</a> to prevent duplicates.
+      description: Check <a href="https://github.com/rix1337/kuasarr/issues?q=is%3Aissue">all issues</a> to prevent duplicates.
       options:
         - label: I confirm this is not a duplicate.
           required: true
   - type: checkboxes
     attributes:
       label: Are hostnames part of this issue?
-      description: The author does not provide any hostnames. You personally decide what sites to use in Quasarr.
+      description: The author does not provide any hostnames. You personally decide what sites to use in kuasarr.
       options:
         - label: No, hostnames are not part of this issue. I am also not asking for any clarification here!
           required: true
@@ -27,7 +27,7 @@ body:
       label: Environment
       description: Tell us about your setup
       value: |
-        - Quasarr version:
+        - kuasarr version:
         - Last working version:
         - Type: [Docker/Windows-Exe/Manual]
         - OS: [Docker/Windows/Linux/macOS]
@@ -52,10 +52,10 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Quasarr.ini
+      label: kuasarr.ini
       description: |
         To reproduce your issue we need to know about your setup.
-        Hostnames and credentials are encrypted in the ini. Never share your Quasarr.db to keep them secure!
+        Hostnames and credentials are encrypted in the ini. Never share your kuasarr.db to keep them secure!
       render: text
     validations:
       required: true
@@ -65,3 +65,4 @@ body:
       description: Add screenshots that show your issue (ideally log and UI e.g. of Radarr/Sonarr)
     validations:
       required: false
+

@@ -1,4 +1,4 @@
-name: Release Artifacts
+﻿name: Release Artifacts
 
 on:
   workflow_dispatch:
@@ -84,8 +84,8 @@ jobs:
           pip install -r requirements.txt
       - name: Compile Windows AMD64 Exe
         run: |
-          $version = python quasarr/providers/version.py
-          pyinstaller --onefile -y --version-file "file_version_info.txt" "Quasarr.py" -n "quasarr-$version-standalone-win64"
+          $version = python kuasarr/providers/version.py
+          pyinstaller --onefile -y --version-file "file_version_info.txt" "kuasarr.py" -n "kuasarr-$version-standalone-win64"
       - name: Upload Windows AMD64 Exe
         uses: actions/upload-artifact@v4
         with:
@@ -111,7 +111,7 @@ jobs:
           pip install -U twine
           pip install -U packaging
       - name: Get Version
-        run: echo "version=$(python quasarr/providers/version.py)" >>$GITHUB_OUTPUT
+        run: echo "version=$(python kuasarr/providers/version.py)" >>$GITHUB_OUTPUT
         id: version
       - name: Generate commit changelog
         id: changelog
@@ -133,4 +133,5 @@ jobs:
           python -m twine upload ./artifact-wheel-amd64/* ./artifact-wheel-arm64/*.whl -u __token__ -p ${{ secrets.PYPI_TOKEN }}
       - name: Trigger Docker Image build
         run: |
-          curl -XPOST -H "authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" -H "Content-Type: application/json" https://api.github.com/repos/rix1337/Quasarr/actions/workflows/BuildImage.yml/dispatches --data '{"ref": "main", "inputs": {"version": "${{ steps.version.outputs.version }}"}}'
+          curl -XPOST -H "authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" -H "Content-Type: application/json" https://api.github.com/repos/rix1337/kuasarr/actions/workflows/BuildImage.yml/dispatches --data '{"ref": "main", "inputs": {"version": "${{ steps.version.outputs.version }}"}}'
+

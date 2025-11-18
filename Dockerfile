@@ -16,7 +16,7 @@ RUN python3 -m pip install requests
 WORKDIR /opt/kuasarr
 
 # copy entire repository into image
-COPY .. /opt/kuasarr
+COPY . /opt/kuasarr
 
 # Temporarily rewrite version to a PEP 440 compatible form for packaging
 RUN python3 - <<'PY'
@@ -54,5 +54,3 @@ ENV PYTHONUNBUFFERED=1 \
     HOSTNAMES=""
 
 ENTRYPOINT ["sh", "-c", "kuasarr --port=8080 --internal_address=$INTERNAL_ADDRESS --external_address=$EXTERNAL_ADDRESS --discord=$DISCORD --hostnames=$HOSTNAMES"]
-
-

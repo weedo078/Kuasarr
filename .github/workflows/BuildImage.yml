@@ -1,4 +1,4 @@
-name: Build Image
+﻿name: Build Image
 
 on:
   workflow_dispatch:
@@ -9,8 +9,8 @@ on:
         required: false
 
 env:
-  ENDPOINT: "rix1337/docker-quasarr"
-  GHCR_ENDPOINT: "ghcr.io/rix1337/quasarr"
+  ENDPOINT: "rix1337/docker-kuasarr"
+  GHCR_ENDPOINT: "ghcr.io/rix1337/kuasarr"
 
 jobs:
   version-check:
@@ -23,8 +23,8 @@ jobs:
           if [ -z "${{ github.event.inputs.version }}" ]; then VS="false"; else VS=${{ github.event.inputs.version }}; fi
           if [[ ${VS} == "false" ]]
           then
-            echo "Grabbing latest quasarr version from pypi.org"
-            VERSION=$(curl -Ls https://pypi.org/pypi/quasarr/json | jq -r .info.version)
+            echo "Grabbing latest kuasarr version from pypi.org"
+            VERSION=$(curl -Ls https://pypi.org/pypi/kuasarr/json | jq -r .info.version)
           else
             echo "Using version from workflow_dispatch input"
             VERSION=${VS}
@@ -52,7 +52,7 @@ jobs:
       - name: Ensure Package Availability
         run: |
           for i in {1..3}; do
-            pip install quasarr==${{ needs.version-check.outputs.output }} && break
+            pip install kuasarr==${{ needs.version-check.outputs.output }} && break
             echo "Package not available yet. Retrying in 30 seconds..."
             sleep 30
           done
@@ -88,7 +88,7 @@ jobs:
       - name: Ensure Package Availability
         run: |
           for i in {1..3}; do
-            pip install quasarr==${{ needs.version-check.outputs.output }} && break
+            pip install kuasarr==${{ needs.version-check.outputs.output }} && break
             echo "Package not available yet. Retrying in 30 seconds..."
             sleep 30
           done
@@ -102,3 +102,4 @@ jobs:
             ${{ env.ENDPOINT }}:latest-arm64,${{ env.ENDPOINT }}:${{ needs.version-check.outputs.output }}-arm64
             ${{ env.GHCR_ENDPOINT }}:latest-arm64,${{ env.GHCR_ENDPOINT }}:${{ needs.version-check.outputs.output }}-arm64
           build-args: VS=${{ needs.version-check.outputs.output }}
+

@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
-# Quasarr
-# Project by https://github.com/rix1337
+﻿# -*- coding: utf-8 -*-
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import setuptools
 
-from quasarr.providers.version import get_version
+from kuasarr.providers.version import get_version
 
 try:
     with open('README.md', encoding='utf-8') as f:
@@ -18,14 +18,14 @@ with open('requirements.txt') as f:
     required = f.read().splitlines()
 
 setuptools.setup(
-    name="quasarr",
+    name="kuasarr",
     version=get_version(),
     author="rix1337",
     author_email="",
-    description="Quasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs.",
+    description="kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs, using CapHa, an additional CaptchaHandler.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/rix1337/Quasarr",
+    url="https://github.com/weedo078/kuasarr",
     packages=setuptools.find_packages(),
     include_package_data=True,
     install_requires=required,
@@ -37,7 +37,9 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'quasarr = quasarr:run',
+            'kuasarr = kuasarr:run',
         ],
     },
 )
+
+

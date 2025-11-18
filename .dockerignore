@@ -1,8 +1,10 @@
-# Virtual environments
-quasarr_venv/
+﻿# Virtual environments
+kuasarr_venv/
 venv/
 env/
 .env
+*.env
+
 
 # Python cache
 __pycache__/
@@ -52,6 +54,7 @@ debug_*.py
 
 # Documentation
 *.md
+!README.md
 docs/
 
 # OS files
@@ -62,6 +65,9 @@ Thumbs.db
 docker/
 Dockerfile
 !Dockerfile.local
+
+# Captcha Helper (nicht auf DockerHub pushen)
+/
 
 # Backup files
 *.bak

@@ -1,5 +1,6 @@
-### Install / Update:
+﻿### Install / Update:
 
-`pip install -U quasarr`
+`pip install -U kuasarr`
 
 ### Changelog:
+
