@@ -1,6 +1,6 @@
-﻿# -*- coding: utf-8 -*-
-# Kuasarr
-# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
+# -*- coding: utf-8 -*-
+# Quasarr
+# Project by https://github.com/rix1337
 
 import json
 from collections import defaultdict
@@ -8,6 +8,10 @@ from urllib.parse import urlparse
 
 from kuasarr.providers.log import info, debug
 from kuasarr.providers.myjd_api import TokenExpiredException, RequestTimeoutException, MYJDException
+from kuasarr.providers import shared_state as shared_state_module
+
+# Set zum Tracken bereits verarbeiteter Downloads (verhindert doppeltes Post-Processing)
+_processed_downloads = set()
 
 
 def get_links_comment(package, package_links):
@@ -96,6 +100,47 @@ def format_eta(seconds):
         return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
+def _trigger_postprocessing(storage_path: str, category: str, package_id: str) -> None:
+    """
+    Triggert Post-Processing für einen abgeschlossenen Download.
+    Wird nur einmal pro package_id ausgeführt.
+    """
+    global _processed_downloads
+    
+    try:
+        from kuasarr.downloads.postprocessing import process_completed_download
+        
+        info(f"Post-Processing wird gestartet für: {package_id}")
+        result = process_completed_download(storage_path, category)
+        
+        # Markiere als verarbeitet
+        _processed_downloads.add(package_id)
+        
+        # Begrenze die Größe des Sets (behalte nur die letzten 1000)
+        if len(_processed_downloads) > 1000:
+            # Entferne die ältesten Einträge (Set hat keine Reihenfolge, aber das ist OK)
+            excess = len(_processed_downloads) - 500
+            for _ in range(excess):
+                _processed_downloads.pop()
+        
+        if result.get("flattened"):
+            info(f"Post-Processing: Ordnerstruktur korrigiert für {package_id}")
+        if result.get("sonarr_triggered"):
+            info(f"Post-Processing: Sonarr Rescan getriggert für {package_id}")
+        if result.get("radarr_triggered"):
+            info(f"Post-Processing: Radarr Rescan getriggert für {package_id}")
+        if result.get("errors"):
+            for error in result["errors"]:
+                debug(f"Post-Processing Fehler: {error}")
+                
+    except ImportError as e:
+        debug(f"Post-Processing Modul nicht verfügbar: {e}")
+    except Exception as e:
+        debug(f"Post-Processing Fehler für {package_id}: {e}")
+        # Trotzdem als verarbeitet markieren, um Endlosschleifen zu vermeiden
+        _processed_downloads.add(package_id)
+
+
 def get_packages(shared_state):
     packages = []
 
@@ -109,9 +154,7 @@ def get_packages(shared_state):
                 "title": data["title"],
                 "urls": data["links"],
                 "size_mb": data["size_mb"],
-                "password": data["password"],
-                "destination_path": data.get("destination_path"),
-                "manual_job_id": data.get("manual_job_id"),
+                "password": data["password"]
             }
 
             packages.append({
@@ -197,6 +240,18 @@ def get_packages(shared_state):
             if not finished and link_details["eta"]:
                 package["eta"] = link_details["eta"]
 
+            # Post-Processing SOFORT wenn Download fertig ist (bevor Sonarr/Radarr reagiert)
+            if finished and not error and comment and comment.startswith("kuasarr_"):
+                if comment not in _processed_downloads:
+                    storage_path = package.get("saveTo", "")
+                    if "movies" in comment:
+                        category = "movies"
+                    elif "docs" in comment:
+                        category = "docs"
+                    else:
+                        category = "tv"
+                    _trigger_postprocessing(storage_path, category, comment)
+
             location = "history" if error or finished else "queue"
 
             packages.append({
@@ -222,7 +277,7 @@ def get_packages(shared_state):
             time_left = "23:59:59"
             if package["type"] == "linkgrabber":
                 details = package["details"]
-                name = f"[Linkgrabber] {details['name']}"
+                name = f"[Linkgrabber] {details["name"]}"
                 try:
                     mb = mb_left = int(details["bytesTotal"]) / (1024 * 1024)
                 except KeyError:
@@ -236,7 +291,7 @@ def get_packages(shared_state):
                     else:
                         category = "tv"
                 except TypeError:
-                    category = "not_kuasarr"
+                    category = "not_quasarr"
                 package_type = "linkgrabber"
                 package_uuid = package["uuid"]
             elif package["type"] == "downloader":
@@ -269,12 +324,12 @@ def get_packages(shared_state):
                     else:
                         category = "tv"
                 except TypeError:
-                    category = "not_kuasarr"
+                    category = "not_quasarr"
                 package_type = "downloader"
                 package_uuid = package["uuid"]
             else:
                 details = package["details"]
-                name = f"[CAPTCHA not solved!] {details['title']}"
+                name = f"[CAPTCHA not solved!] {details["title"]}"
                 mb = mb_left = details["size_mb"]
                 try:
                     package_id = package["package_id"]
@@ -285,7 +340,7 @@ def get_packages(shared_state):
                     else:
                         category = "tv"
                 except TypeError:
-                    category = "not_kuasarr"
+                    category = "not_quasarr"
                 package_type = "protected"
                 package_uuid = None
 
@@ -332,7 +387,7 @@ def get_packages(shared_state):
                 else:
                     category = "tv"
             except TypeError:
-                category = "not_kuasarr"
+                category = "not_quasarr"
 
             error = package.get("error")
             fail_message = ""
@@ -341,6 +396,9 @@ def get_packages(shared_state):
                 fail_message = error
             else:
                 status = "Completed"
+                # Fallback: Post-Processing falls im Downloader-Status verpasst
+                if package_id and package_id.startswith("kuasarr_") and package_id not in _processed_downloads:
+                    _trigger_postprocessing(storage, category, package_id)
 
             downloads["history"].append({
                 "fail_message": fail_message,
@@ -358,7 +416,7 @@ def get_packages(shared_state):
         else:
             info(f"Invalid package location {package['location']}")
 
-    if not shared_state.get_device().linkgrabber.is_collecting():
+    if shared_state_module.is_linkgrabber_start_due() and not shared_state.get_device().linkgrabber.is_collecting():
         linkgrabber_packages = shared_state.get_device().linkgrabber.query_packages()
         linkgrabber_links = shared_state.get_device().linkgrabber.query_links()
 
@@ -381,9 +439,19 @@ def get_packages(shared_state):
                     break
 
         if packages_to_start and links_to_start:
+            info(
+                "JDownloader Linkgrabber → Downloadliste: übertrage %s (links=%s)"
+                % (packages_to_start, len(links_to_start))
+            )
             shared_state.get_device().linkgrabber.move_to_downloadlist(links_to_start, packages_to_start)
-            info(f"Started {len(packages_to_start)} package download"
-                 f"{'s' if len(packages_to_start) > 1 else ''} from linkgrabber")
+            info(
+                f"Started {len(packages_to_start)} package download"
+                f"{'s' if len(packages_to_start) > 1 else ''} from linkgrabber"
+            )
+        else:
+            debug("JDownloader: keine Quasarr-Pakete im Linkgrabber zum Starten gefunden")
+
+        shared_state_module.complete_linkgrabber_start_check()
 
     return downloads
 
@@ -446,6 +514,3 @@ def delete_package(shared_state, package_id):
         info(f"Failed to delete package {package_id}")
         return False
     return True
-
-
-

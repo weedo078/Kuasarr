@@ -2,58 +2,74 @@
 # Kuasarr
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
+import json
 import re
+from pathlib import Path
 
 import requests
 
-LATEST_RELEASE_LINK = "https://github.com/weedo078/kuasarr-dl/releases/latest"
+LATEST_RELEASE_LINK = "https://hub.docker.com/r/weedo078/kuasarr/tags"
 
 
 def get_version():
-    return "1.0.dev.1"
+    """Liest die Version aus version.json im Projekt-Root."""
+    # Suche version.json relativ zum Package oder im aktuellen Verzeichnis
+    possible_paths = [
+        Path(__file__).parent.parent.parent / "version.json",  # kuasarr/providers -> root
+        Path("version.json"),
+        Path("/opt/kuasarr/version.json"),  # Docker-Pfad
+    ]
+    for path in possible_paths:
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                return data.get("version", "0.0.0")
+            except (json.JSONDecodeError, OSError):
+                continue
+    return "0.0.0"
 
 
 def get_latest_version():
     """
-    Query GitHub API for the latest release of the kuasarr repository.
+    Query Docker Hub API for the latest tag of the kuasarr image.
     Returns the tag name string (e.g. "1.5.0" or "1.4.2a1").
     Raises RuntimeError on HTTP errors.
     """
-    api_urls = [
-        "https://api.github.com/repos/weedo078/kuasarr-dl/releases/latest",
-        "https://api.github.com/repos/weedo078/kuasarr/releases/latest",
-        "https://api.github.com/repos/rix1337/kuasarr/releases/latest",
-    ]
-
-    last_error = None
     global LATEST_RELEASE_LINK
-
-    for api_url in api_urls:
-        resp = requests.get(api_url, headers={"Accept": "application/vnd.github.v3+json"})
-        if resp.status_code == 404:
-            continue
+    
+    # Docker Hub API für Tags
+    api_url = "https://hub.docker.com/v2/repositories/weedo078/kuasarr/tags?page_size=100"
+    
+    try:
+        resp = requests.get(api_url, timeout=10)
         if resp.status_code != 200:
-            last_error = RuntimeError(f"GitHub API error: {resp.status_code} {resp.text}")
-            continue
+            raise RuntimeError(f"Docker Hub API error: {resp.status_code} {resp.text}")
+        
         data = resp.json()
-        tag = data.get("tag_name") or data.get("name")
-        if not tag:
-            last_error = RuntimeError("Could not find tag_name in GitHub response")
-            continue
-        tag = tag.strip()
-        if tag.lower().startswith('v'):
-            tag = tag[1:].lstrip('.')
-        html_url = data.get("html_url")
-        if html_url:
-            LATEST_RELEASE_LINK = html_url
-        else:
-            owner_repo = api_url.split("/repos/")[-1].split("/releases")[0]
-            LATEST_RELEASE_LINK = f"https://github.com/{owner_repo}/releases/tag/{tag}"
-        return tag
-
-    if last_error:
-        raise last_error
-    raise RuntimeError("No releases found for the configured repositories")
+        tags = data.get("results", [])
+        
+        if not tags:
+            raise RuntimeError("No tags found on Docker Hub")
+        
+        # Filtere nur semantische Versions-Tags (z.B. 1.0.0, 1.1.0), ignoriere "latest"
+        version_tags = []
+        for tag_info in tags:
+            tag_name = tag_info.get("name", "")
+            if tag_name and tag_name != "latest" and re.match(r"^\d+\.\d+(\.\d+)?", tag_name):
+                version_tags.append(tag_name)
+        
+        if not version_tags:
+            raise RuntimeError("No version tags found on Docker Hub")
+        
+        # Sortiere nach Version (höchste zuerst)
+        version_tags.sort(key=_version_key, reverse=True)
+        latest_tag = version_tags[0]
+        
+        LATEST_RELEASE_LINK = f"https://hub.docker.com/r/weedo078/kuasarr/tags?name={latest_tag}"
+        return latest_tag
+        
+    except requests.RequestException as e:
+        raise RuntimeError(f"Docker Hub API request failed: {e}")
 
 
 def _split_suffix_tokens(suffix: str):

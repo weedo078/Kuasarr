@@ -171,7 +171,7 @@ def ad_search(shared_state, start_time, request_from, search_string, mirror=None
         return releases
 
     if shared_state.is_imdb_id(search_string):
-        info(f"{hostname}: IMDb-Suche wird nicht unterstÃ¼tzt")
+        info(f"{hostname}: IMDb-Suche wird nicht unterstützt")
         return releases
 
     payload = {"do": "search", "subaction": "search", "story": search_string}

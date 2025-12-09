@@ -16,10 +16,11 @@ from kuasarr.downloads.sources.dt import get_dt_download_links
 from kuasarr.downloads.sources.dw import get_dw_download_links
 from kuasarr.downloads.sources.mb import get_mb_download_links
 from kuasarr.downloads.sources.nx import get_nx_download_links
-from kuasarr.downloads.sources.dl import get_dl_download_link
+from kuasarr.downloads.sources.dl import get_dl_download_links
 from kuasarr.downloads.sources.sf import get_sf_download_links, resolve_sf_redirect
 from kuasarr.downloads.sources.sl import get_sl_download_links
 from kuasarr.downloads.sources.wd import get_wd_download_links
+from kuasarr.downloads.sources.wx import get_wx_download_links
 from kuasarr.providers.log import info
 from kuasarr.providers.notifications import send_discord_message
 from kuasarr.providers.statistics import StatsHelper
@@ -88,6 +89,69 @@ def handle_al(shared_state, title, password, package_id, imdb_id, url, mirror, s
         label='AL',
         destination_folder=destination_folder,
     )
+
+
+def handle_by(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
+    """
+    Special handler for BY that separates:
+    - Direct download links (from hide.cx) -> unprotected
+    - Protected links (from filecrypt) -> need CAPTCHA
+    """
+    links = get_by_download_links(shared_state, url, mirror, title)
+    
+    if not links:
+        fail(title, package_id, shared_state,
+             reason=f'No links found for "{title}" on BY - "{url}"')
+        return {"success": False, "title": title}
+    
+    # Separate direct links (strings) from protected links (lists with [url, hostname])
+    direct_links = []
+    protected_links = []
+    
+    for link in links:
+        if isinstance(link, str):
+            # Direct download link (from hide.cx)
+            direct_links.append(link)
+        elif isinstance(link, list) and len(link) >= 2:
+            # Protected link [url, hostname] (from filecrypt)
+            protected_links.append(link)
+    
+    # If we have direct links, download them immediately
+    if direct_links:
+        info(f"BY: Found {len(direct_links)} direct download links (hide.cx)")
+        send_discord_message(shared_state, title=title, case="unprotected", imdb_id=imdb_id, source=url)
+        added = shared_state.download_package(
+            direct_links,
+            title,
+            password,
+            package_id,
+            destination_folder=destination_folder,
+        )
+        if added:
+            StatsHelper(shared_state).increment_package_with_links(direct_links)
+            return {"success": True, "title": title}
+        else:
+            fail(title, package_id, shared_state,
+                 reason=f'Failed to add {len(direct_links)} direct links for "{title}" to linkgrabber')
+    
+    # If we have protected links (filecrypt), queue them for CAPTCHA
+    if protected_links:
+        info(f"BY: Found {len(protected_links)} protected links (filecrypt) - CAPTCHA required")
+        send_discord_message(shared_state, title=title, case="captcha", imdb_id=imdb_id, source=url)
+        blob = json.dumps({
+            "title": title,
+            "links": protected_links,
+            "size_mb": size_mb,
+            "password": password,
+            "destination_folder": destination_folder,
+        })
+        shared_state.values["database"]("protected").update_store(package_id, blob)
+        return {"success": True, "title": title}
+    
+    # No valid links found
+    fail(title, package_id, shared_state,
+         reason=f'No valid links found for "{title}" on BY - "{url}"')
+    return {"success": False, "title": title}
 
 
 def handle_ad(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
@@ -190,15 +254,16 @@ def handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, s
 
 
 def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
-    result = get_dl_download_link(shared_state, url, title)
-    links = []
-    resolved_password = None
-
-    if isinstance(result, dict):
-        links = result.get("links") or []
-        resolved_password = result.get("password")
-    elif isinstance(result, (list, tuple)):
-        links = list(result)
+    """Handle DL source downloads."""
+    result = get_dl_download_links(shared_state, url, mirror, title)
+    
+    if not result:
+        fail(title, package_id, shared_state,
+             reason=f'Offline / no links found for "{title}" on DL - "{url}"')
+        return {"success": False, "title": title}
+    
+    links = result.get("links") or []
+    resolved_password = result.get("password")
 
     if resolved_password:
         password = resolved_password
@@ -222,10 +287,8 @@ def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, s
 
 
 def download(shared_state, request_from, title, url, mirror, size_mb, password, imdb_id=None,
-             destination_folder=None, manual_job_id=None):
-    if request_from.lower() == "manual":
-        category = "dl"
-    elif "lazylibrarian" in request_from.lower():
+             destination_folder=None):
+    if "lazylibrarian" in request_from.lower():
         category = "docs"
     elif "radarr" in request_from.lower():
         category = "movies"
@@ -233,8 +296,6 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
         category = "tv"
 
     package_hash = str(hash(title + url)).replace('-', '')
-    if manual_job_id:
-        package_hash = f"{package_hash}_{manual_job_id}"
     package_id = f"kuasarr_{category}_{package_hash}"
 
     if imdb_id is not None and imdb_id.lower() == "none":
@@ -253,7 +314,8 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
         'NX': config.get("nx"),
         'SF': config.get("sf"),
         'SL': config.get("sl"),
-        'WD': config.get("wd")
+        'WD': config.get("wd"),
+        'WX': config.get("wx")
     }
 
     if flags['DL'] and flags['DL'].lower() in url.lower():
@@ -280,10 +342,8 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
     if flags['BY'] and flags['BY'].lower() in url.lower():
         return {
             "package_id": package_id,
-            **handle_protected(
-                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
-                func=get_by_download_links, label='BY', destination_folder=destination_folder,
-            )
+            **handle_by(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
+                        destination_folder=destination_folder)
         }
 
     if flags['DD'] and flags['DD'].lower() in url.lower():
@@ -350,6 +410,15 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
             "package_id": package_id,
             **handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb,
                         destination_folder=destination_folder)
+        }
+
+    if flags['WX'] and flags['WX'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_unprotected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_wx_download_links, label='WX', destination_folder=destination_folder,
+            )
         }
 
     if "filecrypt" in url.lower():

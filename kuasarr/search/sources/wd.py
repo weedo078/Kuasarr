@@ -1,6 +1,6 @@
-﻿# -*- coding: utf-8 -*-
-# Kuasarr
-# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
+# -*- coding: utf-8 -*-
+# Quasarr
+# Project by https://github.com/rix1337
 
 import html
 import re
@@ -14,7 +14,6 @@ from bs4 import BeautifulSoup
 
 from kuasarr.providers.imdb_metadata import get_localized_title
 from kuasarr.providers.log import info, debug
-from kuasarr.providers.sessions.ad import flaresolverr_request
 
 hostname = "wd"
 supported_mirrors = ["rapidgator", "ddownload", "katfile", "fikper", "turbobit"]
@@ -27,36 +26,10 @@ RESOLUTION_REGEX = re.compile(r"\d{3,4}p", re.I)
 CODEC_REGEX = re.compile(r"x264|x265|h264|h265|hevc|avc", re.I)
 
 
-def _request(shared_state, url: str, method: str = "GET", data=None, timeout: int = 20):
-    """Fetch URL via FlareSolverr if configured, otherwise plain requests."""
-    fs_config = shared_state.values["config"]("FlareSolverr")
-    flaresolverr_url = fs_config.get("url") if fs_config else None
-
-    if flaresolverr_url:
-        try:
-            response = flaresolverr_request(shared_state, None, method, url, data=data, timeout=timeout)
-            if response and response.get("text"):
-                return response.get("text")
-        except Exception as exc:
-            info(f"{hostname.upper()}: FlareSolverr error for {url}: {exc}")
-
-    headers = {"User-Agent": shared_state.values["user_agent"]}
-    try:
-        if method.upper() == "POST":
-            resp = requests.post(url, data=data or {}, headers=headers, timeout=timeout)
-        else:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-        return resp.text
-    except Exception as exc:
-        info(f"{hostname.upper()}: HTTP error for {url}: {exc}")
-        return None
-
-
 def convert_to_rss_date(date_str):
     """
     date_str comes in as "02.05.2025 - 09:04"
-    Return RFCâ€‘822 style date with +0000 timezone.
+    Return RFC‑822 style date with +0000 timezone.
     """
     parsed = datetime.strptime(date_str, "%d.%m.%Y - %H:%M")
     return parsed.strftime("%a, %d %b %Y %H:%M:%S +0000")
@@ -64,7 +37,7 @@ def convert_to_rss_date(date_str):
 
 def extract_size(text):
     """
-    e.g. "8 GB" â†’ {"size": "8", "sizeunit": "GB"}
+    e.g. "8 GB" → {"size": "8", "sizeunit": "GB"}
     """
     match = re.match(r"(\d+(?:\.\d+)?)\s*([A-Za-z]+)", text)
     if not match:
@@ -190,11 +163,10 @@ def wd_feed(shared_state, start_time, request_from, mirror=None):
         feed_type = "Serien"
 
     url = f"https://{wd}/{feed_type}"
+    headers = {'User-Agent': shared_state.values["user_agent"]}
     try:
-        response_text = _request(shared_state, url)
-        if not response_text:
-            raise ValueError("Empty response from WD feed")
-        soup = BeautifulSoup(response_text, "html.parser")
+        response = requests.get(url, headers=headers, timeout=10).content
+        soup = BeautifulSoup(response, "html.parser")
         releases = _parse_rows(soup, shared_state, wd, password, mirror)
     except Exception as e:
         info(f"Error loading {hostname.upper()} feed: {e}")
@@ -218,12 +190,11 @@ def wd_search(shared_state, start_time, request_from, search_string, mirror=None
 
     q = quote_plus(search_string)
     url = f"https://{wd}/search?q={q}"
+    headers = {'User-Agent': shared_state.values["user_agent"]}
 
     try:
-        response_text = _request(shared_state, url)
-        if not response_text:
-            raise ValueError("Empty response from WD search")
-        soup = BeautifulSoup(response_text, "html.parser")
+        response = requests.get(url, headers=headers, timeout=10).content
+        soup = BeautifulSoup(response, "html.parser")
         releases = _parse_rows(
             soup, shared_state, wd, password, mirror,
             request_from=request_from,
@@ -235,6 +206,3 @@ def wd_search(shared_state, start_time, request_from, search_string, mirror=None
         releases = []
     debug(f"Time taken: {time.time() - start_time:.2f}s ({hostname})")
     return releases
-
-
-

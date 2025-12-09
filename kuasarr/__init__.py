@@ -16,6 +16,7 @@ import requests
 
 from kuasarr.api import get_api
 from kuasarr.providers import shared_state, version
+from kuasarr.providers.capha_push_dispatcher import CaphaPushDispatcher
 from kuasarr.providers.log import info, debug
 from kuasarr.providers.notifications import send_discord_message
 from kuasarr.storage.config import Config, get_clean_hostnames
@@ -41,7 +42,7 @@ def run():
         sys.stdout = Unbuffered(sys.stdout)
 
         banner_lines = [
-            f"kuasarr DL {version.get_version()} by weedo078 (fork of RiX1337/kuasarr)",
+            f"Kuasarr {version.get_version()} by weedo078 (fork of RiX1337/kuasarr)",
             "https://github.com/weedo078/kuasarr",
         ]
         banner_width = max(len(line) for line in banner_lines) + 4
@@ -51,8 +52,8 @@ def run():
         print("\n".join([top_border, *formatted_lines, bottom_border]))
 
         print("\n===== Recommended Services =====")
-        print('For convenient universal premium downloads use: "https://linksnappy.com/?ref=397097"')
-        print('Automatisierte CAPTCHA-Lösungen können über den seperat erhältlichen CaptchaHelper erfolgen.')
+        print('For convenient universal premium downloads use: "http://real-debrid.com/?id=13910652"')
+        print('Automated CAPTCHA solutions are available via the separately offered CaptchaHelper.')
 
         print("\n===== Startup Info =====")
         port = int('8080')
@@ -108,7 +109,8 @@ def run():
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36")
         shared_state.update("helper_active", False)
 
-        capha_config = Config('CapHa')
+        # CaptchaSolverr Config (neue v1 API)
+        captchasolverr_config = Config('CaptchaSolverr')
 
         def _to_bool(value, default=False):
             if value is None:
@@ -123,17 +125,46 @@ def run():
             except (TypeError, ValueError, AttributeError):
                 return default
 
-        parallel_mode_config = _to_bool(capha_config.get('parallel_mode'), False)
-        parallel_mode_env = os.getenv("CAPHA_PARALLEL_MODE")
+        # Parallel-Mode: Config > ENV
+        parallel_mode_config = _to_bool(captchasolverr_config.get('parallel_mode'), False)
+        parallel_mode_env = os.getenv("CAPTCHASOLVERR_PARALLEL_MODE") or os.getenv("CAPHA_PARALLEL_MODE")
         parallel_mode_enabled = _to_bool(parallel_mode_env, parallel_mode_config)
-        shared_state.update("capha_parallel_mode", parallel_mode_enabled)
+        shared_state.update("captchasolverr_parallel_mode", parallel_mode_enabled)
+        shared_state.update("capha_parallel_mode", parallel_mode_enabled)  # Legacy-Alias
 
-        config_parallel_max = _to_positive_int(capha_config.get('parallel_max_slots'), 3)
-        max_slots_env = os.getenv("CAPHA_PARALLEL_MAX")
+        # Max-Slots: Config > ENV
+        config_parallel_max = _to_positive_int(captchasolverr_config.get('parallel_max_slots'), 3)
+        max_slots_env = os.getenv("CAPTCHASOLVERR_PARALLEL_MAX") or os.getenv("CAPHA_PARALLEL_MAX")
         parallel_max = _to_positive_int(max_slots_env, config_parallel_max)
-        shared_state.update("capha_parallel_max", parallel_max)
+        shared_state.update("captchasolverr_parallel_max", parallel_max)
+        shared_state.update("capha_parallel_max", parallel_max)  # Legacy-Alias
         shared_state.update("parallel_handlers", {})
         shared_state.update("parallel_jobs", {})
+
+        # CaptchaSolverr URL: Config > ENV
+        captchasolverr_url_config = captchasolverr_config.get('url') or ""
+        captchasolverr_url_env = os.getenv("CAPTCHASOLVERR_URL") or os.getenv("CAPHA_URL", "")
+        captchasolverr_url = (captchasolverr_url_env or captchasolverr_url_config).strip()
+        shared_state.update("captchasolverr_url", captchasolverr_url)
+        shared_state.update("capha_url", captchasolverr_url)  # Legacy-Alias
+        
+        # Timeout und Retry-Einstellungen
+        captchasolverr_timeout = _to_positive_int(captchasolverr_config.get('timeout'), 30)
+        captchasolverr_retries = _to_positive_int(captchasolverr_config.get('retries'), 3)
+        captchasolverr_retry_backoff = _to_positive_int(captchasolverr_config.get('retry_backoff'), 5)
+        shared_state.update("captchasolverr_timeout", captchasolverr_timeout)
+        shared_state.update("captchasolverr_retries", captchasolverr_retries)
+        shared_state.update("captchasolverr_retry_backoff", captchasolverr_retry_backoff)
+        # Legacy-Aliase
+        shared_state.update("capha_timeout", captchasolverr_timeout)
+        shared_state.update("capha_retries", captchasolverr_retries)
+        shared_state.update("capha_retry_backoff", captchasolverr_retry_backoff)
+        
+        if parallel_mode_enabled:
+            if captchasolverr_url:
+                print(f"CaptchaSolverr Parallel-Mode: URL={captchasolverr_url}, Max-Slots={parallel_max}")
+            else:
+                print("CaptchaSolverr Parallel-Mode aktiviert, aber keine URL konfiguriert!")
 
         print(f'Config path: "{config_path}"')
 
@@ -285,9 +316,20 @@ def run():
         )
         updater.start()
 
+        # Start CapHa Push-Dispatcher if parallel mode is enabled
+        capha_dispatcher = None
+        if shared_state.values.get("capha_parallel_mode"):
+            capha_dispatcher = CaphaPushDispatcher(state_module=shared_state)
+            capha_dispatcher.start()
+            info("CapHa Parallel-Modus aktiviert – Push-Dispatcher gestartet")
+        else:
+            info("CapHa Parallel-Modus deaktiviert – Legacy-Polling aktiv")
+
         try:
             get_api(shared_state_dict, shared_state_lock)
         except KeyboardInterrupt:
+            if capha_dispatcher:
+                capha_dispatcher.stop()
             jdownloader.kill()
             updater.kill()
             sys.exit(0)

@@ -47,6 +47,9 @@ debug_*.py
 *.swp
 *.swo
 *~
+.cursor/
+.pytest_cache/
+.windsurf/
 
 # Git
 .git/
@@ -67,11 +70,19 @@ Dockerfile
 !Dockerfile.local
 
 # Captcha Helper (nicht auf DockerHub pushen)
-/
+captcha_helper/
+config/
+docker/
+Quasarr/
+tests/
+tmp-config/
 
 # Backup files
 *.bak
 *.backup
 
 # Development files
-requirements-dev.txt 
+requirements-dev.txt
+
+*.ini
+*.db

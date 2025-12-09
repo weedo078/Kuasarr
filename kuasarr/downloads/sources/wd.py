@@ -1,6 +1,6 @@
-﻿# -*- coding: utf-8 -*-
-# Kuasarr
-# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
+# -*- coding: utf-8 -*-
+# Quasarr
+# Project by https://github.com/rix1337
 
 import re
 from urllib.parse import urljoin
@@ -8,8 +8,8 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from kuasarr.providers.cloudflare import flaresolverr_get, is_cloudflare_challenge
 from kuasarr.providers.log import info, debug
-from kuasarr.providers.sessions.ad import flaresolverr_request
 
 
 def resolve_wd_redirect(url, user_agent):
@@ -37,27 +37,14 @@ def resolve_wd_redirect(url, user_agent):
 def get_wd_download_links(shared_state, url, mirror, title):  # signature must align with other download link functions!
     wd = shared_state.values["config"]("Hostnames").get("wd")
     user_agent = shared_state.values["user_agent"]
-    headers = {"User-Agent": user_agent}
 
     try:
-        response_text = None
-        fs_config = shared_state.values["config"]("FlareSolverr")
-        flaresolverr_url = fs_config.get("url") if fs_config else None
+        output = requests.get(url)
+        if output.status_code == 403 or is_cloudflare_challenge(output.text):
+            info("WD is protected by Cloudflare. Using FlareSolverr to bypass protection.")
+            output = flaresolverr_get(shared_state, url)
 
-        if flaresolverr_url:
-            try:
-                fs_response = flaresolverr_request(shared_state, None, "GET", url, timeout=20)
-                if fs_response and fs_response.get("text"):
-                    response_text = fs_response.get("text")
-            except Exception as exc:
-                info(f"WD: FlareSolverr error for {url}: {exc}")
-
-        if response_text is None:
-            resp = requests.get(url, headers=headers, timeout=10)
-            resp.raise_for_status()
-            response_text = resp.text
-
-        soup = BeautifulSoup(response_text, "html.parser")
+        soup = BeautifulSoup(output.text, "html.parser")
 
         # extract IMDb id if present
         imdb_id = None
@@ -121,6 +108,3 @@ def get_wd_download_links(shared_state, url, mirror, title):  # signature must a
         "links": results,
         "imdb_id": imdb_id,
     }
-
-
-

@@ -21,7 +21,7 @@ from kuasarr.providers.sessions.dl import fetch_via_requests_session
 def dl_flexible_string_match(search_string, title):
     """
     DL-spezifische flexible String-Matching-Funktion.
-    Erkennt auch zusammengeschriebene Titel wie 'BetterCallSaulS01' fÃ¼r 'Better Call Saul'
+    Erkennt auch zusammengeschriebene Titel wie 'BetterCallSaulS01' für 'Better Call Saul'
     """
     from kuasarr.providers.shared_state import sanitize_string
     
@@ -43,7 +43,7 @@ def dl_flexible_string_match(search_string, title):
         debug(f"[DL-MATCH] No-spaces match: '{search_no_spaces}' in '{title_no_spaces}'")
         return True
     
-    # Strategie 3: Wort-fÃ¼r-Wort Matching - alle WÃ¶rter mÃ¼ssen vorkommen
+    # Strategie 3: Wort-für-Wort Matching - alle Wörter müssen vorkommen
     search_words = sanitized_search_string.split()
     if len(search_words) > 1:
         all_words_found = True
@@ -63,22 +63,22 @@ def dl_flexible_string_match(search_string, title):
 
 def extract_size_from_text(text):
     """
-    Erweiterte GrÃ¶ÃŸenextraktion aus verschiedenen Text-Formaten
+    Erweiterte Größenextraktion aus verschiedenen Text-Formaten
     Basierend auf den HTML-Beispielen von data-load.me
     """
     if not text:
         return {"size": 0, "sizeunit": "B"}
     
-    # Normalisiere den Text fÃ¼r bessere Erkennung
+    # Normalisiere den Text für bessere Erkennung
     text = text.strip()
     
     debug(f"[DL-SIZE] Analysiere Text: {text[:200]}...")
     
-    # SPEZIAL-CHECK: Multi-GrÃ¶ÃŸen Format mit "je" - Muss ZUERST kommen!
+    # SPEZIAL-CHECK: Multi-Größen Format mit "je" - Muss ZUERST kommen!
     if "je " in text.lower():
         all_sizes = re.findall(r'(\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)', text, re.IGNORECASE)
         if len(all_sizes) > 1:
-            # Konvertiere alle zu MB und nehme die grÃ¶ÃŸte
+            # Konvertiere alle zu MB und nehme die größte
             best_size = 0
             best_unit = "B"
             best_original = 0
@@ -87,7 +87,7 @@ def extract_size_from_text(text):
                 size = float(size_str.replace(',', '.'))
                 clean_unit = unit.upper().replace('IB', 'B')
                 
-                # Konvertiere zu MB fÃ¼r Vergleich
+                # Konvertiere zu MB für Vergleich
                 mb_value = size
                 if clean_unit == "KB":
                     mb_value = size / 1024
@@ -102,10 +102,10 @@ def extract_size_from_text(text):
                     best_original = size
             
             if best_size > 0:
-                debug(f"[DL-SIZE] Multi-Format mit 'je' gefunden: {best_original} {best_unit} (grÃ¶ÃŸte von {len(all_sizes)} GrÃ¶ÃŸen)")
+                debug(f"[DL-SIZE] Multi-Format mit 'je' gefunden: {best_original} {best_unit} (größte von {len(all_sizes)} Größen)")
                 return {"size": best_original, "sizeunit": best_unit}
     
-    # Methode 1: MediaInfo "File size" Format aus Code-BlÃ¶cken
+    # Methode 1: MediaInfo "File size" Format aus Code-Blöcken
     # "File size                                : 926 MiB"
     size_match = re.search(r'File\s+size\s*[:ï¼š]\s*(\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)', text, re.IGNORECASE)
     if size_match:
@@ -135,15 +135,15 @@ def extract_size_from_text(text):
         debug(f"[DL-SIZE] Size-Format gefunden: {size} {unit}")
         return {"size": size, "sizeunit": unit}
     
-    # Methode 4: "GrÃ¶ÃŸe" oder "GrÃ¶sse" Format (deutsche Varianten)
-    # "GrÃ¶sse.............: je 721 MB 1,23 GB" oder "GrÃ¶ÃŸe: 5.67 GB"
-    # WICHTIG: Bei "je" Format mit mehreren GrÃ¶ÃŸen, gehe zu Multi-Format
-    size_match = re.search(r'Gr[Ã¶o](?:ss|ÃŸ)e[.\s]*[:ï¼š]\s*(?!je\s)(\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)', text, re.IGNORECASE)
+    # Methode 4: "Größe" oder "Grösse" Format (deutsche Varianten)
+    # "Grösse.............: je 721 MB 1,23 GB" oder "Größe: 5.67 GB"
+    # WICHTIG: Bei "je" Format mit mehreren Größen, gehe zu Multi-Format
+    size_match = re.search(r'Gr[öo](?:ss|ß)e[.\s]*[:ï¼š]\s*(?!je\s)(\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)', text, re.IGNORECASE)
     if size_match:
         size_str = size_match.group(1).replace(',', '.')
         size = float(size_str)
         unit = size_match.group(2).upper().replace('IB', 'B')
-        debug(f"[DL-SIZE] GrÃ¶ÃŸe-Format gefunden: {size} {unit}")
+        debug(f"[DL-SIZE] Größe-Format gefunden: {size} {unit}")
         return {"size": size, "sizeunit": unit}
     
     # Methode 5: Standard Format ohne Doppelpunkt
@@ -156,7 +156,7 @@ def extract_size_from_text(text):
         debug(f"[DL-SIZE] Standard-Format gefunden: {size} {unit}")
         return {"size": size, "sizeunit": unit}
     
-    # Methode 6: GrÃ¶ÃŸe in Klammern oder als separater Text
+    # Methode 6: Größe in Klammern oder als separater Text
     # "[123 MB]" oder "(1.5 GB)"
     size_match = re.search(r'[\[\(](\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)[\]\)]', text, re.IGNORECASE)
     if size_match:
@@ -167,17 +167,17 @@ def extract_size_from_text(text):
         return {"size": size, "sizeunit": unit}
     
     # Methode 7: Spezielle Formate mit HTML-Tags
-    # Entferne HTML-Tags fÃ¼r bessere Erkennung
+    # Entferne HTML-Tags für bessere Erkennung
     clean_text = re.sub(r'<[^>]+>', ' ', text)
     if clean_text != text:
         debug(f"[DL-SIZE] Versuche nochmal ohne HTML-Tags")
         return extract_size_from_text(clean_text)
     
-    # Methode 8: Multi-GrÃ¶ÃŸen Format (nehme die erste grÃ¶ÃŸere GrÃ¶ÃŸe)
+    # Methode 8: Multi-Größen Format (nehme die erste größere Größe)
     # "je 721 MB 1,23 GB" - nehme 1,23 GB
     all_sizes = re.findall(r'(\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)', text, re.IGNORECASE)
     if all_sizes:
-        # Konvertiere alle zu MB und nehme die grÃ¶ÃŸte
+        # Konvertiere alle zu MB und nehme die größte
         best_size = 0
         best_unit = "B"
         best_original = 0
@@ -186,7 +186,7 @@ def extract_size_from_text(text):
             size = float(size_str.replace(',', '.'))
             clean_unit = unit.upper().replace('IB', 'B')
             
-            # Konvertiere zu MB fÃ¼r Vergleich
+            # Konvertiere zu MB für Vergleich
             mb_value = size
             if clean_unit == "KB":
                 mb_value = size / 1024
@@ -201,16 +201,16 @@ def extract_size_from_text(text):
                 best_original = size
         
         if best_size > 0:
-            debug(f"[DL-SIZE] Multi-Format gefunden: {best_original} {best_unit} (grÃ¶ÃŸte von {len(all_sizes)} GrÃ¶ÃŸen)")
+            debug(f"[DL-SIZE] Multi-Format gefunden: {best_original} {best_unit} (größte von {len(all_sizes)} Größen)")
             return {"size": best_original, "sizeunit": best_unit}
     
-    # Fallback: Keine GrÃ¶ÃŸe gefunden
-    debug(f"[DL-SIZE] Keine GrÃ¶ÃŸenangabe gefunden in: {text[:100]}...")
+    # Fallback: Keine Größe gefunden
+    debug(f"[DL-SIZE] Keine Größenangabe gefunden in: {text[:100]}...")
     return {"size": 0, "sizeunit": "B"}
 
 
 def extract_size(text):
-    """Extrahiert die GrÃ¶ÃŸe aus einem Text (Legacy-Funktion)"""
+    """Extrahiert die Größe aus einem Text (Legacy-Funktion)"""
     return extract_size_from_text(text)
 
 
@@ -229,7 +229,7 @@ def parse_date_from_html(html_elem):
         if datetime_str:
             try:
                 # Parse ISO format: 2025-01-18T14:06:58+0100
-                # Entferne Zeitzone-Info fÃ¼r einfaches Parsing
+                # Entferne Zeitzone-Info für einfaches Parsing
                 if '+' in datetime_str:
                     datetime_clean = datetime_str.split('+')[0]
                 elif datetime_str.count('-') > 2:  # Mehr als 2 Bindestriche = Zeitzone
@@ -263,7 +263,7 @@ def parse_date_from_html(html_elem):
             if re.match(r'\d{1,2}\s+\w+\s+\d{4}', date_text):
                 # Konvertiere deutsche Monatsnamen
                 month_map = {
-                    'Januar': 'January', 'Februar': 'February', 'MÃ¤rz': 'March',
+                    'Januar': 'January', 'Februar': 'February', 'März': 'March',
                     'April': 'April', 'Mai': 'May', 'Juni': 'June',
                     'Juli': 'July', 'August': 'August', 'September': 'September',
                     'Oktober': 'October', 'November': 'November', 'Dezember': 'December'
@@ -287,7 +287,7 @@ def parse_date_from_html(html_elem):
         if result:
             return result
     
-    debug("[DL-DATE] Kein gÃ¼ltiges Datum gefunden")
+    debug("[DL-DATE] Kein gültiges Datum gefunden")
     return None
 
 
@@ -318,7 +318,7 @@ def extract_search_id(shared_state):
             return "34811168"
         soup = BeautifulSoup(response.text, "html.parser")
         
-        # Suche nach Formularen oder Links, die zur Suchfunktion fÃ¼hren
+        # Suche nach Formularen oder Links, die zur Suchfunktion führen
         search_forms = soup.find_all('form', action=re.compile(r'/search/'))
         if search_forms:
             action_url = search_forms[0].get('action', '')
@@ -457,7 +457,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
     info(f"[DL-DEBUG] Empfangen von {request_from}: Suchbegriff = '{search_string}', season = '{season}', episode = '{episode}', imdb_id = '{imdb_id}'")
     
     if not dl:
-        debug("Hostname fÃ¼r DL nicht konfiguriert")
+        debug("Hostname für DL nicht konfiguriert")
         return releases
     
     # **SMARTE SUCHLOGIK: Erstelle search_string wenn leer aber andere Parameter vorhanden**
@@ -478,10 +478,10 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
             search_string = f"{search_string} S{int(season):02}"
             info(f"[DL-DEBUG] Erweitert mit S{int(season):02}: '{search_string}'")
     elif not search_string:
-        info(f"[DL-DEBUG] Keine Suchparameter verfÃ¼gbar - Suche abgebrochen")
+        info(f"[DL-DEBUG] Keine Suchparameter verfügbar - Suche abgebrochen")
         return releases
     
-    # ÃœberprÃ¼fen, ob es sich um eine IMDb-ID handelt (fÃ¼r den Fall dass search_string eine IMDb-ID ist)
+    # Überprüfen, ob es sich um eine IMDb-ID handelt (für den Fall dass search_string eine IMDb-ID ist)
     original_imdb_id = imdb_id
     if not imdb_id:
         imdb_id = shared_state.is_imdb_id(search_string)
@@ -498,7 +498,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
     
     try:
         # Moderne Formular-Simulation (wie im Demo erfolgreich getestet)
-        info(f"[DL-DEBUG] Starte Such-Formular-Simulation fÃ¼r: '{search_string}'")
+        info(f"[DL-DEBUG] Starte Such-Formular-Simulation für: '{search_string}'")
         
         # SCHRITT 1: Lade die Such-Seite mit dem Suchbegriff
         initial_search_url = f"https://{dl}/search/?q={search_string}"
@@ -537,7 +537,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
             search_url = f"https://{dl}/search/{search_id}/?{urlencode(params)}"
             response = fetch_via_requests_session(shared_state, "GET", search_url, timeout=10)
             if not response:
-                debug("[DL-SEARCH] KRITISCHER FEHLER: Konnte Fallback-Suche nicht ausfÃ¼hren")
+                debug("[DL-SEARCH] KRITISCHER FEHLER: Konnte Fallback-Suche nicht ausführen")
                 return releases
             response.raise_for_status()
         else:
@@ -574,10 +574,10 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                 if value:
                     get_params[key] = value
             
-            # SCHRITT 4: Sende Such-Request (verwende GET da POST oft fehlschlÃ¤gt)
-            debug(f"FÃ¼hre Formular-Suche aus: {search_url}")
+            # SCHRITT 4: Sende Such-Request (verwende GET da POST oft fehlschlägt)
+            debug(f"Führe Formular-Suche aus: {search_url}")
             
-            # Kleine VerzÃ¶gerung, um Erkennung als Bot zu vermeiden
+            # Kleine Verzögerung, um Erkennung als Bot zu vermeiden
             time.sleep(random.uniform(0.5, 1.5))
             
             # URL mit Parametern zusammenbauen
@@ -592,7 +592,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
             
             response = fetch_via_requests_session(shared_state, "GET", full_url, timeout=15)
             if not response:
-                debug("[DL-SEARCH] KRITISCHER FEHLER: Konnte Formular-Suche nicht ausfÃ¼hren")
+                debug("[DL-SEARCH] KRITISCHER FEHLER: Konnte Formular-Suche nicht ausführen")
                 return releases
         
         response.raise_for_status()
@@ -612,13 +612,13 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
             if content_row:
                 results.append(content_row)
         
-        # METHODE 2: Fallback fÃ¼r structItem-Struktur
+        # METHODE 2: Fallback für structItem-Struktur
         if not results:
             struct_items = soup.find_all('div', class_='structItem')
             info(f"[DL-DEBUG] Fallback: Gefundene structItem Elemente: {len(struct_items)}")
             results.extend(struct_items)
         
-        # METHODE 3: Generischer Fallback fÃ¼r h3-Elemente mit Links
+        # METHODE 3: Generischer Fallback für h3-Elemente mit Links
         if not results:
             h3_elements = soup.find_all('h3')
             info(f"[DL-DEBUG] Fallback: Gefundene h3 Elemente: {len(h3_elements)}")
@@ -626,7 +626,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                 if h3.find('a'):
                     results.append(h3.parent)
         
-        # METHODE 4: Spezifische Suche nach Titel-Links mit dem Suchbegriff (zusÃ¤tzlicher Fallback)
+        # METHODE 4: Spezifische Suche nach Titel-Links mit dem Suchbegriff (zusätzlicher Fallback)
         if not results:
             sanitized_search = re.escape(search_string.lower())
             title_links = soup.find_all('a', string=re.compile(sanitized_search, re.IGNORECASE))
@@ -678,7 +678,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                 title = title_elem.get_text(strip=True)
                 title = html.unescape(title)
                 
-                # ÃœberprÃ¼fen, ob der Suchbegriff im Titel enthalten ist
+                # Überprüfen, ob der Suchbegriff im Titel enthalten ist
                 if search_string and not dl_flexible_string_match(search_string, title):
                     continue
                 
@@ -689,32 +689,32 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                 if not link.startswith(('http://', 'https://')):
                     link = urljoin(f"https://{dl}", link)
                 
-                # **VERBESSERTE GRÃ–SSEN-EXTRAKTION**
+                # **VERBESSERTE GRÖSSEN-EXTRAKTION**
                 size_text = ""
                 mb = 0
                 
-                # Suche ZUERST im spezifischen Thread-Content, nicht in Ã¼bergeordneten Elementen
+                # Suche ZUERST im spezifischen Thread-Content, nicht in übergeordneten Elementen
                 
-                # 1. Versuche direkt zur Thread-Seite zu gehen fÃ¼r spezifische GrÃ¶ÃŸenangaben
+                # 1. Versuche direkt zur Thread-Seite zu gehen für spezifische Größenangaben
                 thread_size_found = False
                 
                 # Schaue ob es ein Link zu einem spezifischen Thread gibt
                 if link and '/threads/' in link:
                     try:
-                        debug(f"[DL-SIZE] Versuche Thread-spezifische GrÃ¶ÃŸensuche fÃ¼r: {link}")
+                        debug(f"[DL-SIZE] Versuche Thread-spezifische Größensuche für: {link}")
                         thread_response = fetch_via_requests_session(shared_state, "GET", link, timeout=10)
                         if thread_response and thread_response.status_code == 200:
                             thread_soup = BeautifulSoup(thread_response.text, 'html.parser')
                             
-                            # Suche in Thread-spezifischen Bereichen nach GrÃ¶ÃŸenangaben
+                            # Suche in Thread-spezifischen Bereichen nach Größenangaben
                             thread_size_sources = []
                             
-                            # In bbCodeBlock-content divs (hÃ¤ufig fÃ¼r GrÃ¶ÃŸenangaben in Threads)
+                            # In bbCodeBlock-content divs (häufig für Größenangaben in Threads)
                             bbcode_blocks = thread_soup.find_all('div', class_='bbCodeBlock-content')
                             for block in bbcode_blocks:
                                 thread_size_sources.append(block.get_text())
                             
-                            # In pre-Elementen (fÃ¼r formatierte Info-BlÃ¶cke)
+                            # In pre-Elementen (für formatierte Info-Blöcke)
                             pre_blocks = thread_soup.find_all('pre')
                             for pre in pre_blocks:
                                 thread_size_sources.append(pre.get_text())
@@ -739,9 +739,9 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                                     break
                             
                             if thread_size_found:
-                                debug(f"[DL-SIZE] Thread-spezifische GrÃ¶ÃŸe erfolgreich: {size_text}")
+                                debug(f"[DL-SIZE] Thread-spezifische Größe erfolgreich: {size_text}")
                             else:
-                                debug(f"[DL-SIZE] Keine thread-spezifische GrÃ¶ÃŸe gefunden")
+                                debug(f"[DL-SIZE] Keine thread-spezifische Größe gefunden")
                     except Exception as e:
                         debug(f"[DL-SIZE] Fehler bei thread-spezifischer Suche: {e}")
                 
@@ -757,8 +757,8 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                         mb = shared_state.convert_to_mb(size_info)
                         debug(f"[DL-SIZE] Fallback erfolgreich: {size_text} = {mb} MB")
                     else:
-                        debug(f"[DL-SIZE] Auch im Fallback keine GrÃ¶ÃŸe gefunden")
-                        # Setze auf 0, damit nicht die falsche GrÃ¶ÃŸe angezeigt wird
+                        debug(f"[DL-SIZE] Auch im Fallback keine Größe gefunden")
+                        # Setze auf 0, damit nicht die falsche Größe angezeigt wird
                         mb = 0
                 
                 # **VERBESSERTE DATUMS-EXTRAKTION**
@@ -792,7 +792,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                     published = datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0000')
                     debug(f"[DL-DATE] Fallback auf aktuelles Datum: {published}")
                 
-                # Link fÃ¼r JDownloader erstellen
+                # Link für JDownloader erstellen
                 source = f"https://{dl}/"
                 
                 # WICHTIG: Verwende immer die Thread-URL im Payload, nicht den Download-Link!
@@ -810,7 +810,7 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                     series_part = season_match.group(1)  # "BetterCallSaul" oder "AmericanDad"
                     season_part = season_match.group(2)  # "S01" oder "S17"
                     
-                    # FÃ¼ge Leerzeichen zwischen GroÃŸbuchstaben ein
+                    # Füge Leerzeichen zwischen Großbuchstaben ein
                     spaced_series = re.sub(r'([a-z])([A-Z])', r'\1 \2', series_part)
                     
                     # Behalte den Rest des Titels (alles nach der Season)
@@ -825,17 +825,17 @@ def dl_search(shared_state, start_time, request_from, search_string, season="", 
                         formatted_title = re.sub(r'([a-z])([A-Z])', r'\1 \2', title)
                         debug(f"[DL-FEED-TITLE] Fallback-Verbesserung: '{title}' â†’ '{formatted_title}'")
                     else:
-                        debug(f"[DL-FEED-TITLE] Keine Verbesserung mÃ¶glich fÃ¼r: '{title}'")
+                        debug(f"[DL-FEED-TITLE] Keine Verbesserung möglich für: '{title}'")
                 
                 releases.append({
                     "details": {
                         "title": formatted_title,
                         "hostname": "dl",
                         "imdb_id": imdb_id if imdb_id else "",
-                        "link": jd_link,  # JDownloader-Link (fÃ¼r Downloads)
+                        "link": jd_link,  # JDownloader-Link (für Downloads)
                         "size": int(mb * 1024 * 1024) if mb > 0 else 0,  # in Bytes
                         "date": published,
-                        "source": link  # Original Thread-URL (fÃ¼r Sonarr-Clicks)
+                        "source": link  # Original Thread-URL (für Sonarr-Clicks)
                     },
                     "type": "protected"
                 })

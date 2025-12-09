@@ -1,6 +1,6 @@
-﻿# -*- coding: utf-8 -*-
-# Kuasarr
-# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
+# -*- coding: utf-8 -*-
+# Quasarr
+# Project by https://github.com/rix1337
 
 import os
 import sys
@@ -10,13 +10,11 @@ from bottle import Bottle, request
 
 import kuasarr
 import kuasarr.providers.html_images as images
-import kuasarr.providers.sessions.ad
-import kuasarr.providers.sessions.al
-import kuasarr.providers.sessions.dd
-import kuasarr.providers.sessions.dl
-import kuasarr.providers.sessions.nx
+import kuasarr.providers.shared_state
+import kuasarr.providers.web_server
 from kuasarr.providers.html_templates import render_button, render_form, render_success, render_fail
 from kuasarr.providers.log import info
+from kuasarr.providers import shared_state, web_server
 from kuasarr.providers.shared_state import extract_valid_hostname
 from kuasarr.providers.web_server import Server
 from kuasarr.storage.config import Config
@@ -40,7 +38,7 @@ def path_config(shared_state):
                            config_form_html)
 
     def set_config_path(config_path):
-        config_path_file = "kuasarr.conf"
+        config_path_file = "Quasarr.conf"
 
         if not config_path:
             config_path = current_path
@@ -60,11 +58,11 @@ def path_config(shared_state):
     def set_config():
         config_path = request.forms.get("config_path")
         config_path = set_config_path(config_path)
-        kuasarr.providers.web_server.temp_server_success = True
+        web_server.temp_server_success = True
         return render_success(f'Config path set to: "{config_path}"',
                               5)
 
-    info(f"Starting web server for config at: \"{shared_state.values['internal_address']}\".")
+    info(f'Starting web server for config at: "{shared_state.values['internal_address']}".')
     info("Please set desired config path there!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
@@ -198,23 +196,8 @@ def save_hostnames(shared_state, timeout=5, first_run=True):
     if not first_run:
         # Append restart notice for specific sites that actually changed
         for site in changed_sites:
-            if site.lower() in {'al', 'dd', 'dl', 'nx'}:
-                optional_text += f"{site.upper()}: You must restart kuasarr and follow additional steps to start using this site.<br>"
-
-    credential_sites = {'al', 'dd', 'dl', 'nx'}  # AD requires no credentials
-    for site in changed_sites:
-        site_lower = site.lower()
-        if site_lower not in credential_sites:
-            continue
-        config_section = Config(site_lower.upper())
-        user = config_section.get('user')
-        password = config_section.get('password')
-        if user and password:
-            continue
-        domain = hostnames.get(site_lower)
-        if not domain:
-            continue
-        return hostname_credentials_config(shared_state, site_lower, domain)
+            if site.lower() in {'al', 'dd', 'nx'}:
+                optional_text += f"{site.upper()}: You must restart Quasarr and follow additional steps to start using this site.<br>"
 
     return render_success(success_msg, timeout, optional_text=optional_text)
 
@@ -226,7 +209,7 @@ def hostnames_config(shared_state):
     def hostname_form():
         message = """<p>
           If you're having trouble setting this up, take a closer look at 
-          <a href="https://github.com/rix1337/kuasarr?tab=readme-ov-file#instructions" target="_blank" rel="noopener noreferrer">
+          <a href="https://github.com/rix1337/Quasarr?tab=readme-ov-file#instructions" target="_blank" rel="noopener noreferrer">
             step one of these instructions.
           </a>
         </p>"""
@@ -236,7 +219,7 @@ def hostnames_config(shared_state):
     def set_hostnames():
         return save_hostnames(shared_state)
 
-    info(f"Hostnames not set. Starting web server for config at: \"{shared_state.values['internal_address']}\".")
+    info(f'Hostnames not set. Starting web server for config at: "{shared_state.values['internal_address']}".')
     info("Please set at least one valid hostname there!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
@@ -276,35 +259,28 @@ def hostname_credentials_config(shared_state, shorthand, domain):
             config.save("user", user)
             config.save("password", password)
 
-            if sh.lower() == "ad":
-                if kuasarr.providers.sessions.ad.create_and_persist_session(shared_state):
-                    kuasarr.providers.web_server.temp_server_success = True
-                    return render_success(f"{sh} credentials set successfully", 5)
             if sh.lower() == "al":
-                if kuasarr.providers.sessions.al.create_and_persist_session(shared_state):
-                    kuasarr.providers.web_server.temp_server_success = True
+                if quasarr.providers.sessions.al.create_and_persist_session(shared_state):
+                    quasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
             if sh.lower() == "dd":
-                if kuasarr.providers.sessions.dd.create_and_persist_session(shared_state):
-                    kuasarr.providers.web_server.temp_server_success = True
-                    return render_success(f"{sh} credentials set successfully", 5)
-            if sh.lower() == "dl":
-                if kuasarr.providers.sessions.dl.create_and_persist_session(shared_state):
-                    kuasarr.providers.web_server.temp_server_success = True
+                if quasarr.providers.sessions.dd.create_and_persist_session(shared_state):
+                    quasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
             if sh.lower() == "nx":
-                if kuasarr.providers.sessions.nx.create_and_persist_session(shared_state):
-                    kuasarr.providers.web_server.temp_server_success = True
+                if quasarr.providers.sessions.nx.create_and_persist_session(shared_state):
+                    quasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
 
         config.save("user", "")
         config.save("password", "")
         return render_fail("User and Password wrong or empty!")
 
-    info(f'"{shorthand.lower()}" credentials required to access download links.')
-    info(f"Starting web server for config at: \"{shared_state.values['internal_address']}\".")
+    info(
+        f'"{shorthand.lower()}" credentials required to access download links. '
+        f'Starting web server for config at: "{shared_state.values['internal_address']}".')
     info(f"If needed register here: 'https://{domain}'")
-    info("Please set your credentials now, to allow kuasarr to launch!")
+    info("Please set your credentials now, to allow Quasarr to launch!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
 
@@ -315,9 +291,9 @@ def flaresolverr_config(shared_state):
     def url_form():
         form_content = '''
         <span><a href="https://github.com/FlareSolverr/FlareSolverr?tab=readme-ov-file#installation">A local instance</a>
-        must be running and reachable to kuasarr!</span><br><br>
+        must be running and reachable to Quasarr!</span><br><br>
         <label for="url">FlareSolverr URL</label>
-        <input type="text" id="url" name="url" placeholder="http://192.168.0.1:8191/v1" required><br>
+        <input type="text" id="url" name="url" placeholder="http://192.168.0.1:8191/v1"><br>
         '''
         form_html = f'''
         <form action="/api/flaresolverr" method="post">
@@ -344,7 +320,7 @@ def flaresolverr_config(shared_state):
                 if response.status_code == 200:
                     config.save("url", url)
                     print(f'Using Flaresolverr URL: "{url}"')
-                    kuasarr.providers.web_server.temp_server_success = True
+                    quasarr.providers.web_server.temp_server_success = True
                     return render_success("FlareSolverr URL saved successfully!", 5)
             except requests.RequestException:
                 pass
@@ -382,7 +358,7 @@ def jdownloader_config(shared_state):
                            {"id": "verifyButton", "type": "button", "onclick": "verifyCredentials()"})}
         </form>
 
-        <p>Some JDownloader settings will be enforced by kuasarr on startup.</p>
+        <p>Some JDownloader settings will be enforced by Quasarr on startup.</p>
 
         <form action="/api/store_jdownloader" method="post" id="deviceForm" style="display: none;">
             <input type="hidden" id="hiddenUser" name="user">
@@ -421,7 +397,7 @@ def jdownloader_config(shared_state):
                     document.getElementById("verifyButton").style.display = "none";
                     document.getElementById('deviceForm').style.display = 'block';
                 } else {
-                    alert('Fehler! Bitte die Zugangsdaten Ã¼berprÃ¼fen.');
+                    alert('Fehler! Bitte die Zugangsdaten überprüfen.');
                 }
             })
             .catch((error) => {
@@ -468,17 +444,15 @@ def jdownloader_config(shared_state):
                 config.save('password', "")
                 config.save('device', "")
             else:
-                kuasarr.providers.web_server.temp_server_success = True
+                quasarr.providers.web_server.temp_server_success = True
                 return render_success("Credentials set",
                                       15)
 
         return render_fail("Could not set credentials!")
 
-    info('My-JDownloader-Credentials not set.')
-    info(f"Starting web server for config at: \"{shared_state.values['internal_address']}\".")
+    info(
+        f'My-JDownloader-Credentials not set. '
+        f'Starting web server for config at: "{shared_state.values['internal_address']}".')
     info("If needed register here: 'https://my.jdownloader.org/login.html#register'")
-    info("Please set your credentials now, to allow kuasarr to launch!")
+    info("Please set your credentials now, to allow Quasarr to launch!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
-
-
-

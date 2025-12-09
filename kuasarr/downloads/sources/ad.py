@@ -63,7 +63,7 @@ def _resolve_peeplink(shared_state, peeplink_url: str, password: Optional[str] =
                 # Submit password form
                 response = flaresolverr_request(shared_state, None, "POST", form_action, data=form_data, timeout=60)
                 if not response or not response.get("text"):
-                    info(f"AD: Fehler beim Ãœbermitteln des Passworts fÃ¼r Peeplink")
+                    info(f"AD: Fehler beim Übermitteln des Passworts für Peeplink")
                     return []
                 soup = BeautifulSoup(response.get("text", ""), "html.parser")
 
@@ -115,7 +115,7 @@ def _resolve_peeplink(shared_state, peeplink_url: str, password: Optional[str] =
         return links
         
     except Exception as exc:
-        info(f"AD: Fehler beim AuflÃ¶sen von Peeplink {peeplink_url}: {exc}")
+        info(f"AD: Fehler beim Auflösen von Peeplink {peeplink_url}: {exc}")
         return []
 
 
@@ -233,7 +233,7 @@ def get_ad_download_links(shared_state, url, mirror, title):  # signature must a
             final_links.append((link_url, label))
     
     if not final_links:
-        info(f"AD: Keine Download-Links fÃ¼r {title} gefunden")
+        info(f"AD: Keine Download-Links für {title} gefunden")
         return []
 
     filtered = _filter_mirror(final_links, mirror)
@@ -242,7 +242,7 @@ def get_ad_download_links(shared_state, url, mirror, title):  # signature must a
     for href, label in filtered:
         data_links.append([href, label or _host_name(href)])
 
-    info(f"AD: {len(data_links)} Links fÃ¼r {title} gesammelt")
+    info(f"AD: {len(data_links)} Links für {title} gesammelt")
     return {"links": data_links, "password": password}
 
 

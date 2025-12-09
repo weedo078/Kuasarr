@@ -81,7 +81,7 @@ def flaresolverr_request(shared_state, session: Optional[requests.Session], meth
     """Make request via FlareSolverr for Cloudflare bypass. Session is optional."""
     config_cls = shared_state.values.get("config")
     if not config_cls:
-        info(f"{hostname}: Config-Handler nicht verfÃ¼gbar")
+        info(f"{hostname}: Config-Handler nicht verfügbar")
         return None
 
     fs_config = config_cls("FlareSolverr")
@@ -128,11 +128,11 @@ def flaresolverr_request(shared_state, session: Optional[requests.Session], meth
     try:
         fs_json = response.json()
     except ValueError:
-        info(f"{hostname}: UngÃ¼ltige Antwort von FlareSolverr")
+        info(f"{hostname}: Ungültige Antwort von FlareSolverr")
         return None
 
     if fs_json.get("status") != "ok" or "solution" not in fs_json:
-        info(f"{hostname}: FlareSolverr lieferte keine LÃ¶sung: {fs_json.get('message', '<unknown>')}")
+        info(f"{hostname}: FlareSolverr lieferte keine Lösung: {fs_json.get('message', '<unknown>')}")
         return None
 
     solution = fs_json.get("solution", {})
@@ -200,11 +200,11 @@ def create_and_persist_session(shared_state) -> Optional[requests.Session]:
         timeout=60,
     )
     if not login_response:
-        info(f"{hostname}: Login fehlgeschlagen â€“ FlareSolverr Antwort ungÃ¼ltig")
+        info(f"{hostname}: Login fehlgeschlagen â€“ FlareSolverr Antwort ungültig")
         return None
 
     if not _validate_session(shared_state, session):
-        info(f"{hostname}: Login nicht erfolgreich â€“ bitte Zugangsdaten prÃ¼fen")
+        info(f"{hostname}: Login nicht erfolgreich â€“ bitte Zugangsdaten prüfen")
         return None
 
     _store_session(shared_state, session)
@@ -219,7 +219,7 @@ def retrieve_and_validate_session(shared_state) -> Optional[requests.Session]:
         session = _load_session(token)
         if session and _validate_session(shared_state, session):
             return session
-        debug(f"{hostname}: gespeicherte Session ungÃ¼ltig â€“ erstelle neu")
+        debug(f"{hostname}: gespeicherte Session ungültig â€“ erstelle neu")
 
     return create_and_persist_session(shared_state)
 

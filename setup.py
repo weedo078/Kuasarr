@@ -20,14 +20,19 @@ with open('requirements.txt') as f:
 setuptools.setup(
     name="kuasarr",
     version=get_version(),
-    author="rix1337",
-    author_email="",
-    description="kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs, using CapHa, an additional CaptchaHandler.",
+    author="weedo078",
+    author_email="weedo0780@protonmail.com",
+    description="kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs, using an additional CaptchaSolverr.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/weedo078/kuasarr",
+    url="https://github.com/rix1337/Kuasarr",
     packages=setuptools.find_packages(),
     include_package_data=True,
+    package_data={
+        "kuasarr": [
+            "static/*.png",
+        ]
+    },
     install_requires=required,
     zip_safe=False,
     classifiers=[

@@ -19,4 +19,8 @@ def debug(string):
         info(string)
 
 
+def error(string):
+    info(f"ERROR: {string}")
+
+
 

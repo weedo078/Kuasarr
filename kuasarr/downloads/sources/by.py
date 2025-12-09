@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
-# Kuasarr
-# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
+# Quasarr
+# Project by https://github.com/rix1337
 
 import concurrent.futures
 import re
+import time
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
+from kuasarr.downloads.linkcrypters.hide import unhide_links
 from kuasarr.providers.log import info, debug
 
 
-def get_by_download_links(shared_state, url, mirror, title): # signature must align with other download link functions!
+def get_by_download_links(shared_state, url, mirror, title):  # signature must align with other download link functions!
     by = shared_state.values["config"]("Hostnames").get("by")
     headers = {
         'User-Agent': shared_state.values["user_agent"],
@@ -39,6 +41,7 @@ def get_by_download_links(shared_state, url, mirror, title): # signature must al
                 r = requests.get(url, headers=headers, timeout=10)
                 return r.text, url
             except Exception:
+                info(f"Error fetching iframe URL: {url}")
                 return None, url
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -52,10 +55,9 @@ def get_by_download_links(shared_state, url, mirror, title): # signature must al
         for content, source in async_results:
             host_soup = BeautifulSoup(content, "html.parser")
             link = host_soup.find("a", href=re.compile(
-                r"https?://(?:www\.)?(?:hide\.cx|filecrypt\.(?:cc|co|to))/container/"
-            ))
+                r"https?://(?:www\.)?(?:hide\.cx|filecrypt\.(?:cc|co|to))/container/"))
 
-            # Fallback auf das alte go.php-Format
+            # Fallback to the old format
             if not link:
                 link = host_soup.find("a", href=re.compile(r"/go\.php\?"))
 
@@ -76,25 +78,48 @@ def get_by_download_links(shared_state, url, mirror, title): # signature must al
             href, hostname = href_hostname
             try:
                 r = requests.get(href, headers=headers, timeout=10, allow_redirects=True)
+                if "/404.html" in r.url:
+                    info(f"Link leads to 404 page for {hostname}: {r.url}")
+                    return None
+                time.sleep(1)
                 return r.url
             except Exception as e:
-                debug(f"Error resolving link for {hostname}: {e}")
+                info(f"Error resolving link for {hostname}: {e}")
                 return None
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_hostname = {executor.submit(resolve_redirect, pair): pair[1] for pair in url_hosters}
-            for future in concurrent.futures.as_completed(future_to_hostname):
-                resolved_url = future.result()
-                hostname = future_to_hostname[future]
-                if not hostname:
-                    hostname = urlparse(resolved_url).hostname
-                if resolved_url:
+        # Sequential processing to avoid bot detection (v1.17.1)
+        for pair in url_hosters:
+            resolved_url = resolve_redirect(pair)
+            hostname = pair[1]
+
+            if not hostname and resolved_url:
+                hostname = urlparse(resolved_url).hostname if resolved_url else None
+
+            if not resolved_url or not hostname:
+                continue
+
+            # Check if it's a hide.cx link - decrypt directly without CAPTCHA
+            if "hide.cx" in resolved_url:
+                info(f"Found hide.cx link, decrypting directly: {resolved_url}")
+                hide_links = unhide_links(shared_state, resolved_url)
+                if hide_links:
+                    info(f"Decrypted {len(hide_links)} links from hide.cx")
+                    # Return directly as unprotected links (list of URLs)
+                    for hide_link in hide_links:
+                        links.append(hide_link)
+                else:
+                    info(f"Failed to decrypt hide.cx link: {resolved_url}")
+                continue
+
+            # For other hosters (filecrypt needs CAPTCHA)
+            if hostname.startswith(("ddownload", "rapidgator", "turbobit", "filecrypt")):
+                if "rapidgator" in hostname:
+                    links.insert(0, [resolved_url, hostname])
+                else:
                     links.append([resolved_url, hostname])
+
 
     except Exception as e:
         info(f"Error loading BY download links: {e}")
 
     return links
-
-
-

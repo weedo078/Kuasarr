@@ -10,8 +10,14 @@ RUN apk add --no-cache \
 
 # allow pip to manage the system installation (PEP 668)
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
-RUN python3 -m pip install --upgrade pip wheel
-RUN python3 -m pip install requests
+
+# discrete virtualenv to keep patched toolchain versions isolated
+RUN python3 -m venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+RUN pip install --no-cache-dir --upgrade pip==25.3 setuptools==78.1.1 wheel
+RUN pip install --no-cache-dir requests
 
 WORKDIR /opt/kuasarr
 
@@ -23,21 +29,21 @@ RUN python3 - <<'PY'
 from pathlib import Path
 path = Path('kuasarr/providers/version.py')
 text = path.read_text()
-path.write_text(text.replace('1.0.dev.1', '1.0.dev1'))
+path.write_text(text.replace('1.3.0', '1.3.0'))
 PY
 
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # install kuasarr from the local checkout (includes our extensions)
-RUN python3 -m pip install --no-build-isolation .
+RUN pip install --no-build-isolation .
 
 # Restore runtime version string in the installed package and source tree
 RUN python3 - <<'PY'
 import kuasarr, pathlib
 installed = pathlib.Path(kuasarr.__file__).parent / 'providers' / 'version.py'
-installed.write_text(installed.read_text().replace('1.0.dev1', '1.0.dev.1'))
+installed.write_text(installed.read_text().replace('1.3.0', '1.3.0'))
 source = pathlib.Path('/opt/kuasarr/kuasarr/providers/version.py')
-source.write_text(source.read_text().replace('1.0.dev1', '1.0.dev.1'))
+source.write_text(source.read_text().replace('1.3.0', '1.3.0'))
 PY
 
 # cleanup build deps to keep image slim

@@ -1,11 +1,10 @@
-﻿# Project by https://github.com/rix1337
+# Project by https://github.com/rix1337
 
 # Python
 *.pyc
 *.bak
 __pycache__/
 .pytest_cache/
-
 
 # Build Tools
 venv
@@ -17,7 +16,6 @@ venv
 *.conf
 *.db
 *.ini
-
 
 # Handler
 neue_version*/
@@ -42,4 +40,9 @@ Quasarr/
 
 config/
 ARCHITECTURE*.md
-kuasarr*.md
+
+# Docker
+docker/*
+*/docker/
+
+tmp-config/

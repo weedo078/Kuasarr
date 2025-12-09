@@ -2,16 +2,15 @@
 # Kuasarr
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
-from bottle import Bottle
+import os
 
-import kuasarr.providers.html_images as images
+from bottle import Bottle, static_file
 from kuasarr.api.arr import setup_arr_routes
 from kuasarr.api.captcha import setup_captcha_routes
 from kuasarr.api.config import setup_config
+from kuasarr.api.hosters import setup_hosters_routes
 from kuasarr.api.sponsors_helper import setup_sponsors_helper_routes
 from kuasarr.api.statistics import setup_statistics
-from kuasarr.api.search import setup_search_routes
-from kuasarr.api.manual_links import setup_manual_link_routes
 from kuasarr.providers import shared_state
 from kuasarr.providers.html_templates import render_button, render_centered_html
 from kuasarr.providers.web_server import Server
@@ -26,10 +25,15 @@ def get_api(shared_state_dict, shared_state_lock):
     setup_arr_routes(app)
     setup_captcha_routes(app)
     setup_config(app, shared_state)
+    setup_hosters_routes(app)
     setup_statistics(app, shared_state)
-    setup_manual_link_routes(app)
     setup_sponsors_helper_routes(app)
-    setup_search_routes(app)
+
+    # Serve static files (logo)
+    @app.get('/static/<filename:path>')
+    def serve_static(filename):
+        static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
+        return static_file(filename, root=static_dir)
 
     @app.get('/')
     def index():
@@ -41,13 +45,13 @@ def get_api(shared_state_dict, shared_state_lock):
             plural = 's' if len(protected) > 1 else ''
             captcha_hint += f"""
             <div class="section">
-                <h2>ðŸ”’ Link{plural} waiting for CAPTCHA solution</h2>
+                <h2>Link{plural} waiting for CAPTCHA solution</h2>
                 """
 
             if not shared_state.values.get("helper_active"):
                 captcha_hint += """
                 <p>
-                    Aktiviere den integrierten CaptchaHelper, um geschützte Pakete automatisch zu entschlüsseln.
+                    Enable the integrated CaptchaHelper to automatically decrypt protected packages.
                 </p>
                 """
 
@@ -59,15 +63,18 @@ def get_api(shared_state_dict, shared_state_lock):
             """
 
         info = f"""
-        <h1><img src="{images.logo}" type="image/png" alt="kuasarr logo" class="logo"/>kuasarr</h1>
+        <div class="header-section">
+            <img src="/static/logo.png" alt="Kuasarr Logo" class="main-logo"/>
+            <p class="tagline">Automated Downloads for Sonarr & Radarr</p>
+        </div>
 
         {captcha_hint}
 
         <div class="section">
-            <h2>ðŸ“– Setup Instructions</h2>
+            <h2>📖 Setup Instructions</h2>
             <p>
-                <a href="https://github.com/rix1337/kuasarr?tab=readme-ov-file#instructions" target="_blank">
-                    Refer to the README for detailed instructions.
+                <a href="https://github.com/weedo078/kuasarr" target="_blank">
+                    📚 Refer to the README for detailed instructions.
                 </a>
             </p>
         </div>
@@ -75,27 +82,27 @@ def get_api(shared_state_dict, shared_state_lock):
         <hr>
 
         <div class="section">
-            <h2>âš™ï¸ API Configuration</h2>
+            <h2>🔧 API Configuration</h2>
             <p>Use the URL and API Key below to set up a <strong>Newznab Indexer</strong> and <strong>SABnzbd Download Client</strong> in Radarr/Sonarr:</p>
 
             <details id="apiDetails">
-                <summary id="apiSummary">Show API Settings</summary>
+                <summary id="apiSummary">🔑 Show API Settings</summary>
                 <div class="api-settings">
 
-                    <h3>URL</h3>
+                    <h3>🌐 URL</h3>
                     <div class="url-wrapper">
                       <input id="urlInput" class="copy-input" type="text" readonly value="{shared_state.values['internal_address']}" />
-                      <button id="copyUrl" class="btn-primary small">Copy</button>
+                      <button id="copyUrl" class="btn-primary small">📋 Copy</button>
                     </div>
 
-                    <h3>API Key</h3>
+                    <h3>🔐 API Key</h3>
                     <div class="api-key-wrapper">
                       <input id="apiKeyInput" class="copy-input" type="password" readonly value="{api_key}" />
-                      <button id="toggleKey" class="btn-secondary small">Show</button>
-                      <button id="copyKey" class="btn-primary small">Copy</button>
+                      <button id="toggleKey" class="btn-secondary small">👁️ Show</button>
+                      <button id="copyKey" class="btn-primary small">📋 Copy</button>
                     </div>
 
-                    <p>{render_button("Regenerate API key", "secondary", {"onclick": "if(confirm('Regenerate API key?')) location.href='/regenerate-api-key';"})}</p>
+                    <p>{render_button("🔄 Regenerate API key", "secondary", {"onclick": "if(confirm('Regenerate API key?')) location.href='/regenerate-api-key';"})}</p>
                 </div>
             </details>
         </div>
@@ -103,14 +110,46 @@ def get_api(shared_state_dict, shared_state_lock):
         <hr>
 
         <div class="section">
-            <h2>ðŸ”§ Quick Actions</h2>
-            <p><button class="btn-primary" onclick="location.href='/search'">Manuelle Suche</button></p>
-            <p><button class="btn-primary" onclick="location.href='/hostnames'">Update Hostnames</button></p>
-            <p><button class="btn-primary" onclick="location.href='/statistics'">View Statistics</button></p>
-            <p><button class="btn-primary" onclick="location.href='/manual-links'">Manual Link Intake</button></p>
+            <h2>⚡ Quick Actions</h2>
+            <div class="action-grid">
+                <button class="action-btn" onclick="location.href='/hostnames'">
+                    <span class="action-icon">🌍</span>
+                    <span class="action-text">Update Hostnames</span>
+                </button>
+                <button class="action-btn" onclick="location.href='/hosters'">
+                    <span class="action-icon">🚫</span>
+                    <span class="action-text">Manage Hosters</span>
+                </button>
+                <button class="action-btn" onclick="location.href='/statistics'">
+                    <span class="action-icon">📊</span>
+                    <span class="action-text">View Statistics</span>
+                </button>
+                <button class="action-btn" onclick="location.href='/captcha'">
+                    <span class="action-icon">🔓</span>
+                    <span class="action-text">CAPTCHA Queue</span>
+                </button>
+            </div>
         </div>
 
         <style>
+            .header-section {{
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            .main-logo {{
+                width: 150px;
+                height: auto;
+                margin-bottom: 10px;
+                filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+            }}
+            .tagline {{
+                font-size: 1.1em;
+                color: #666;
+                margin: 0;
+            }}
+            body.dark .tagline {{
+                color: #aaa;
+            }}
             .section {{ margin: 20px 0; }}
             .api-settings {{ padding: 15px 0; }}
             hr {{ margin: 25px 0; border: none; border-top: 1px solid #ddd; }}
@@ -123,6 +162,46 @@ def get_api(shared_state_dict, shared_state_lock):
             summary:hover {{ 
                 color: #0066cc; 
             }}
+            .action-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 12px;
+                margin-top: 15px;
+            }}
+            .action-btn {{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 20px 15px;
+                border: 1px solid rgba(13, 110, 253, 0.3);
+                border-radius: 12px;
+                background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }}
+            .action-btn:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 6px 20px rgba(13, 110, 253, 0.25);
+                border-color: #0d6efd;
+            }}
+            .action-icon {{
+                font-size: 2em;
+                margin-bottom: 8px;
+            }}
+            .action-text {{
+                font-size: 0.9em;
+                font-weight: 500;
+                color: #1f2933;
+            }}
+            @media (prefers-color-scheme: dark) {{
+                .action-text {{
+                    color: #f8f9fa;
+                }}
+            }}
+            body.dark .action-btn {{
+                background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0.25) 100%);
+            }}
         </style>
 
         <script>
@@ -133,8 +212,8 @@ def get_api(shared_state_dict, shared_state_lock):
             copyUrlBtn.onclick = () => {{
               urlInput.select();
               document.execCommand('copy');
-              copyUrlBtn.innerText = 'Copied!';
-              setTimeout(() => {{ copyUrlBtn.innerText = 'Copy'; }}, 2000);
+              copyUrlBtn.innerText = '✅ Copied!';
+              setTimeout(() => {{ copyUrlBtn.innerText = '📋 Copy'; }}, 2000);
             }};
           }}
 
@@ -146,7 +225,7 @@ def get_api(shared_state_dict, shared_state_lock):
             toggleBtn.onclick = () => {{
               const isHidden = apiInput.type === 'password';
               apiInput.type = isHidden ? 'text' : 'password';
-              toggleBtn.innerText = isHidden ? 'Hide' : 'Show';
+              toggleBtn.innerText = isHidden ? '🙈 Hide' : '👁️ Show';
             }};
           }}
 
@@ -155,9 +234,9 @@ def get_api(shared_state_dict, shared_state_lock):
               apiInput.type = 'text';
               apiInput.select();
               document.execCommand('copy');
-              copyBtn.innerText = 'Copied!';
-              toggleBtn.innerText = 'Hide';
-              setTimeout(() => {{ copyBtn.innerText = 'Copy'; }}, 2000);
+              copyBtn.innerText = '✅ Copied!';
+              toggleBtn.innerText = '🙈 Hide';
+              setTimeout(() => {{ copyBtn.innerText = '📋 Copy'; }}, 2000);
             }};
           }}
 
@@ -168,9 +247,9 @@ def get_api(shared_state_dict, shared_state_lock):
           if (apiDetails && apiSummary) {{
             apiDetails.addEventListener('toggle', () => {{
               if (apiDetails.open) {{
-                apiSummary.textContent = 'Hide API Settings';
+                apiSummary.textContent = '🔒 Hide API Settings';
               }} else {{
-                apiSummary.textContent = 'Show API Settings';
+                apiSummary.textContent = '🔑 Show API Settings';
               }}
             }});
           }}

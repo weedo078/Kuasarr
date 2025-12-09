@@ -4,6 +4,7 @@
 
 import base64
 import configparser
+import os
 import re
 import string
 
@@ -38,15 +39,20 @@ class Config(object):
             ("nx", "secret", ""),
             ("sf", "secret", ""),
             ("sl", "secret", ""),
-            ("wd", "secret", "")
+            ("wd", "secret", ""),
+            ("wx", "secret", "")
         ],
         'FlareSolverr': [
             ("url", "str", ""),
         ],
-        'CapHa': [
+        'CaptchaSolverr': [
+            ("url", "str", ""),
             ("parallel_mode", "bool", "false"),
             ("parallel_max_slots", "str", "3"),
-        ],
+            ("timeout", "str", "30"),
+            ("retries", "str", "3"),
+            ("retry_backoff", "str", "5"),
+        ],        
         'AD': [
             ("user", "secret", ""),
             ("password", "secret", "")
@@ -66,6 +72,21 @@ class Config(object):
         'NX': [
             ("user", "secret", ""),
             ("password", "secret", "")
+        ],
+        'Sonarr': [
+            ("url", "str", ""),
+            ("api_key", "secret", "")
+        ],
+        'Radarr': [
+            ("url", "str", ""),
+            ("api_key", "secret", "")
+        ],
+        'PostProcessing': [
+            ("flatten_nested_folders", "bool", "true"),
+            ("trigger_rescan", "bool", "true")
+        ],
+        'BlockedHosters': [
+            ("hosters", "secret", "")  # Komma-separierte Liste von Hoster-IDs (verschlüsselt)
         ]
     }
     __config__ = []
@@ -75,9 +96,14 @@ class Config(object):
         self._section = section
         self._config = configparser.RawConfigParser()
         try:
-            self._config.read(self._configfile)
-            self._config.has_section(
-                self._section) or self._set_default_config(self._section)
+            # Lese existierende Config (falls vorhanden)
+            if os.path.exists(self._configfile):
+                self._config.read(self._configfile)
+            
+            # Füge fehlende Sektion hinzu (ohne andere zu löschen)
+            if not self._config.has_section(self._section):
+                self._set_default_config(self._section)
+            
             self.__config__ = self._read_config(self._section)
         except configparser.DuplicateSectionError:
             print('Duplicate Section in Config File')
@@ -87,11 +113,26 @@ class Config(object):
             raise
 
     def _set_default_config(self, section):
-        self._config.add_section(section)
+        """
+        Stellt sicher, dass eine Sektion und alle erwarteten Keys existieren,
+        ohne vorhandene Werte zu überschreiben.
+        """
+        existing_config = configparser.RawConfigParser()
+        if os.path.exists(self._configfile):
+            existing_config.read(self._configfile)
+
+        if not existing_config.has_section(section):
+            existing_config.add_section(section)
+
+        # Ergänze fehlende Keys mit Default-Werten
         for (key, key_type, value) in self._DEFAULT_CONFIG[section]:
-            self._config.set(section, key, value)
+            if not existing_config.has_option(section, key):
+                existing_config.set(section, key, value)
+
         with open(self._configfile, 'w') as configfile:
-            self._config.write(configfile)
+            existing_config.write(configfile)
+
+        self._config = existing_config
 
     def _get_encryption_params(self):
         crypt_key = DataBase('secrets').retrieve("key")
