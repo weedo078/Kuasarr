@@ -22,18 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.4.2] - 2025-12-10
 
-### Added
-- **Keeplinks Test Script**: `test_keeplinks.py` to validate CAPTCHA solving + link extraction via DBC
-
 ### Changed
 - **Keeplinks Decryption**:
-  - Retry-Logik für DBC-Captchas mit automatischem Reporting fehlerhafter Lösungen
-  - Verbesserte Link-Erkennung (ignoriert Werbe-/Affiliate-Links, sucht gezielt nach `form_box_title`/`selecttext`)
-  - Keeplinks wird nun nach erfolgreicher Entschlüsselung wieder in den Direktlink-Flow eingespeist
+  - Retry logic for DBC captchas with automatic reporting of incorrect solutions
+  - Improved link detection (ignores ad/affiliate links, specifically searches for `form_box_title`/`selecttext`)
+  - Keeplinks is now fed back into the direct link flow after successful decryption
 
 ### Fixed
-- **DBC Dispatcher**: Keeplinks-Links werden korrekt erkannt, Werbelinks (z.B. `ddownload.com/free...`) gefiltert
-- **Linkcrypters/Keeplinks**: Session bleibt während CAPTCHA gültig; Linkliste wird zuverlässig extrahiert
+- **DBC Dispatcher**: Keeplinks links are correctly detected, ad links (e.g. `ddownload.com/free...`) are filtered
+- **Linkcrypters/Keeplinks**: Session remains valid during CAPTCHA; link list is reliably extracted
 
 ---
 
