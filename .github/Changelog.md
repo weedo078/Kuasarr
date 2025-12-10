@@ -6,6 +6,91 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0] - 2025-12-10
+
+### Added
+- **Progressive Web App**: New `manifest.webmanifest`, service worker (`sw.js`), offline fallback page, and dedicated icons provide installable experience across desktop/mobile.
+- **PWA Install Page**: `/pwa-install` guides users through installation and offers native install prompt where supported.
+- **Windows EXE Onboarding**: First run of the packaged EXE now auto-opens the PWA install page in the default browser.
+
+### Changed
+- **HTML Templates**: Added PWA meta tags (`theme-color`, `apple-mobile-web-app-*`), manifest link, and service worker registration script.
+- **Static Serving**: Setup and main Bottle apps serve the new PWA assets (manifest, service worker, install page) with correct MIME types.
+- **Configuration**: New `[PWA]` section tracks whether the install prompt was already shown to avoid repeated popups.
+
+---
+
+## [1.4.2] - 2025-12-10
+
+### Added
+- **Keeplinks Test Script**: `test_keeplinks.py` to validate CAPTCHA solving + link extraction via DBC
+
+### Changed
+- **Keeplinks Decryption**:
+  - Retry-Logik für DBC-Captchas mit automatischem Reporting fehlerhafter Lösungen
+  - Verbesserte Link-Erkennung (ignoriert Werbe-/Affiliate-Links, sucht gezielt nach `form_box_title`/`selecttext`)
+  - Keeplinks wird nun nach erfolgreicher Entschlüsselung wieder in den Direktlink-Flow eingespeist
+
+### Fixed
+- **DBC Dispatcher**: Keeplinks-Links werden korrekt erkannt, Werbelinks (z.B. `ddownload.com/free...`) gefiltert
+- **Linkcrypters/Keeplinks**: Session bleibt während CAPTCHA gültig; Linkliste wird zuverlässig extrahiert
+
+---
+
+## [1.4.1] - 2025-12-10
+
+### Fixed
+- **Captcha Bypass UI**: Fixed TypeError caused by inline dict usage in `render_button`
+- **DBC Dispatcher**: Stale job detection resets processing jobs hanging >2 min
+- **CF Bypass**: Fixed error handling when FS returns error dict
+- **CutCaptcha**: Now uses official `DBC-official` library (HTTP API returns 501)
+- **reCAPTCHA v2**: Fixed HTTP API implementation (type=4, token_params JSON)
+
+### Added
+- **Dependency**: `DBC-official>=4.6.0` for CutCaptcha support
+
+### Changed
+- **DBC Client**: 
+  - CutCaptcha uses official library (HTTP API doesn't support type=19)
+  - reCAPTCHA/Image captchas use own HTTP API implementation
+
+### Improved
+- Added detailed logging for CF bypass status
+- Added progress logs for each link processed
+- Added Circle-Captcha coordinate logging & validation
+
+---
+
+## [1.4.0] - 2025-12-09
+
+### Added
+- **DBC Integration**: Full captcha solving via DBC API
+  - Replaces Sponsors_Helper completely
+  - Supports image captchas, reCAPTCHA v2, CutCaptcha, and Circle-Captcha (coordinates)
+  - Encrypted credential storage in `kuasarr.ini`
+  - Environment variable support: `DBC_USERNAME`, `DBC_PASSWORD`, `DBC_AUTHTOKEN`
+  - Balance logging before each cost-incurring request
+  - Affiliate link displayed when credits are empty
+- **New API Endpoints** at `/dbc/api/`:
+  - `GET /dbc/api/status/` - DBC status and balance
+  - `GET /dbc/api/balance/` - Account balance
+  - `GET /dbc/api/packages/` - Protected packages
+  - `GET /dbc/api/jobs/` - Active captcha jobs
+  - `POST /dbc/api/test_credentials/` - Test DBC credentials
+
+### Removed
+- **Sponsors_Helper Integration**: Completely removed
+
+### Changed
+- **Config**: New `[DBC]` section with encrypted credentials
+- **Dispatcher**: New `DBCDispatcher`
+- **Code Reorganization**: `kuasarr/providers/` restructured into submodules:
+  - `captcha/` - DBC client, dispatcher, push jobs
+  - `network/` - CF bypass, URL functions
+  - `ui/` - HTML templates and images
+
+---
+
 ## [1.3.0] - 2025-12-09
 
 ### Added

@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 from bottle import Bottle, HTTPError, redirect, request, response
 
-import kuasarr.providers.html_images as images
+import kuasarr.providers.ui.html_images as images
 try:
     import kuasarr.downloads.manual_jobs as manual_jobs
 except ModuleNotFoundError as exc:  # pragma: no cover - defensive
@@ -16,7 +16,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - defensive
         "Manual link ingestion requires the updated 'kuasarr.downloads.manual_jobs' module."
         " Please reinstall or upgrade kuasarr."
     ) from exc
-from kuasarr.providers.html_templates import render_button, render_centered_html, render_fail
+from kuasarr.providers.ui.html_templates import render_button, render_centered_html, render_fail
 from kuasarr.storage.manual_jobs import (
     STATUS_AWAITING_CAPTCHA,
     STATUS_CANCELLED,

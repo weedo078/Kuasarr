@@ -11,11 +11,11 @@ from urllib.parse import quote, unquote, urljoin
 import requests
 from bottle import request, response, redirect
 
-import kuasarr.providers.html_images as images
+import kuasarr.providers.ui.html_images as images
 from kuasarr.downloads.linkcrypters.filecrypt import get_filecrypt_links, DLC
 from kuasarr.downloads.packages import delete_package
 from kuasarr.providers import shared_state
-from kuasarr.providers.html_templates import render_button, render_centered_html
+from kuasarr.providers.ui.html_templates import render_button, render_centered_html
 from kuasarr.providers.log import info, debug
 from kuasarr.providers.obfuscated import captcha_js, captcha_values
 from kuasarr.providers.statistics import StatsHelper
@@ -120,6 +120,8 @@ def setup_captcha_routes(app):
             f"pkg_pass={quote(password)}"
         )
 
+        submit_button = render_button("Submit", "primary", {"type": "submit"})
+
         return f'''
         <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ccc;">
             <details id="bypassDetails">
@@ -141,7 +143,7 @@ def setup_captcha_routes(app):
                     </div>
 
                     <div>
-                        {render_button("Submit", "primary", {{"type": "submit"}})}
+                        {submit_button}
                     </div>
                 </form>
             </details>

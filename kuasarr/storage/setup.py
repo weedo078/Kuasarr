@@ -6,22 +6,49 @@ import os
 import sys
 
 import requests
-from bottle import Bottle, request
+from bottle import Bottle, request, static_file
 
 import kuasarr
-import kuasarr.providers.html_images as images
+import kuasarr.providers.ui.html_images as images
 import kuasarr.providers.shared_state
 import kuasarr.providers.web_server
-from kuasarr.providers.html_templates import render_button, render_form, render_success, render_fail
+from kuasarr.providers.ui.html_templates import render_button, render_form, render_success, render_fail
 from kuasarr.providers.log import info
 from kuasarr.providers import shared_state, web_server
 from kuasarr.providers.shared_state import extract_valid_hostname
 from kuasarr.providers.web_server import Server
 from kuasarr.storage.config import Config
 
+# Static files directory for PWA assets
+STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
+
+
+def add_static_route(app):
+    """Add static file serving route to a Bottle app for PWA support."""
+    @app.get('/static/<filename:path>')
+    def serve_static(filename):
+        mimetype = None
+        if filename.endswith('.webmanifest'):
+            mimetype = 'application/manifest+json'
+        elif filename.endswith('.js'):
+            mimetype = 'application/javascript'
+        return static_file(filename, root=STATIC_DIR, mimetype=mimetype)
+
+    @app.get('/pwa-install')
+    def pwa_install():
+        return static_file('pwa-install.html', root=STATIC_DIR)
+
+
+def _validate_address(address):
+    if not address:
+        return False
+    value = address.strip()
+    return value.startswith("http://") or value.startswith("https://")
+
 
 def path_config(shared_state):
     app = Bottle()
+    add_static_route(app)
 
     current_path = os.path.dirname(os.path.abspath(sys.argv[0]))
 
@@ -64,6 +91,56 @@ def path_config(shared_state):
 
     info(f'Starting web server for config at: "{shared_state.values['internal_address']}".')
     info("Please set desired config path there!")
+    return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
+
+
+def connection_config(shared_state):
+    app = Bottle()
+    add_static_route(app)
+
+    @app.get('/')
+    def connection_form():
+        connection_cfg = Config('Connection')
+        default_internal = connection_cfg.get('internal_address') or shared_state.values.get("internal_address", "")
+        default_external = connection_cfg.get('external_address') or shared_state.values.get("external_address", "")
+        form_html = f'''
+        <form action="/api/connection" method="post">
+            <label for="internal_address">Internal URL (Radarr/Sonarr will use this)</label>
+            <input type="text" id="internal_address" name="internal_address" placeholder="http://192.168.0.1:8080" value="{default_internal}"><br>
+
+            <label for="external_address">External URL (used in notifications, defaults to internal)</label>
+            <input type="text" id="external_address" name="external_address" placeholder="http://mydomain.example:8080" value="{default_external}"><br>
+
+            {render_button("Save", "primary", {"type": "submit"})}
+        </form>
+        '''
+        return render_form("Configure the base URLs Kuasarr will advertise.", form_html)
+
+    @app.post("/api/connection")
+    def set_connection():
+        internal = (request.forms.get("internal_address") or "").strip()
+        external = (request.forms.get("external_address") or "").strip()
+
+        if not _validate_address(internal):
+            return render_fail("Internal address must start with http:// or https://")
+
+        if not external:
+            external = internal
+
+        if not _validate_address(external):
+            return render_fail("External address must start with http:// or https://")
+
+        config = Config('Connection')
+        config.save("internal_address", internal)
+        config.save("external_address", external)
+
+        shared_state.set_connection_info(internal, external, shared_state.values['port'])
+
+        kuasarr.providers.web_server.temp_server_success = True
+        return render_success("Connection settings saved successfully!", 5)
+
+    info(f'Starting connection setup server at: "{shared_state.values["internal_address"]}".')
+    info("Please set the internal/external URL there!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
 
@@ -204,6 +281,7 @@ def save_hostnames(shared_state, timeout=5, first_run=True):
 
 def hostnames_config(shared_state):
     app = Bottle()
+    add_static_route(app)
 
     @app.get('/')
     def hostname_form():
@@ -224,8 +302,63 @@ def hostnames_config(shared_state):
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
 
+def dbc_credentials_config(shared_state):
+    app = Bottle()
+    add_static_route(app)
+
+    @app.get('/')
+    def credentials_form():
+        dbc_cfg = Config('DeathByCaptcha')
+        default_authtoken = dbc_cfg.get('authtoken') or ""
+        default_username = dbc_cfg.get('username') or ""
+        form_html = f'''
+        <p>You can provide either your <strong>API Token</strong> (recommended) or username + password.</p>
+        <form action="/api/dbc_credentials" method="post">
+            <label for="authtoken">DeathByCaptcha API Token</label>
+            <input type="text" id="authtoken" name="authtoken" placeholder="your_api_token" value="{default_authtoken}"><br>
+
+            <p style="margin:0.5rem 0;">— or —</p>
+
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" placeholder="username@example.com" value="{default_username}"><br>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="Password"><br>
+
+            {render_button("Save", "primary", {"type": "submit"})}
+            {render_button("Skip", "secondary", {"type": "submit", "name": "skip", "value": "1"})}
+        </form>
+        '''
+        return render_form("Configure DeathByCaptcha credentials", form_html)
+
+    @app.post('/api/dbc_credentials')
+    def set_dbc_credentials():
+        if request.forms.get("skip"):
+            kuasarr.providers.web_server.temp_server_success = True
+            return render_success("Skipped DeathByCaptcha setup. You can configure it later via the Kuasarr UI.", 5)
+
+        authtoken = (request.forms.get("authtoken") or "").strip()
+        username = (request.forms.get("username") or "").strip()
+        password = (request.forms.get("password") or "").strip()
+
+        if not authtoken and (not username or not password):
+            return render_fail("Provide either API token or username + password.")
+
+        config = Config('DeathByCaptcha')
+        config.save("authtoken", authtoken)
+        config.save("username", username if not authtoken else username)
+        config.save("password", password if not authtoken else password)
+
+        kuasarr.providers.web_server.temp_server_success = True
+        return render_success("DeathByCaptcha credentials saved!", 5)
+
+    info(f'Starting DBC credential setup at: "{shared_state.values["internal_address"]}".')
+    info("Please enter your DeathByCaptcha API token or credentials there!")
+    return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
+
+
 def hostname_credentials_config(shared_state, shorthand, domain):
     app = Bottle()
+    add_static_route(app)
 
     shorthand = shorthand.upper()
 
@@ -260,16 +393,16 @@ def hostname_credentials_config(shared_state, shorthand, domain):
             config.save("password", password)
 
             if sh.lower() == "al":
-                if quasarr.providers.sessions.al.create_and_persist_session(shared_state):
-                    quasarr.providers.web_server.temp_server_success = True
+                if kuasarr.providers.sessions.al.create_and_persist_session(shared_state):
+                    kuasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
             if sh.lower() == "dd":
-                if quasarr.providers.sessions.dd.create_and_persist_session(shared_state):
-                    quasarr.providers.web_server.temp_server_success = True
+                if kuasarr.providers.sessions.dd.create_and_persist_session(shared_state):
+                    kuasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
             if sh.lower() == "nx":
-                if quasarr.providers.sessions.nx.create_and_persist_session(shared_state):
-                    quasarr.providers.web_server.temp_server_success = True
+                if kuasarr.providers.sessions.nx.create_and_persist_session(shared_state):
+                    kuasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
 
         config.save("user", "")
@@ -286,6 +419,7 @@ def hostname_credentials_config(shared_state, shorthand, domain):
 
 def flaresolverr_config(shared_state):
     app = Bottle()
+    add_static_route(app)
 
     @app.get('/')
     def url_form():
@@ -320,7 +454,7 @@ def flaresolverr_config(shared_state):
                 if response.status_code == 200:
                     config.save("url", url)
                     print(f'Using Flaresolverr URL: "{url}"')
-                    quasarr.providers.web_server.temp_server_success = True
+                    kuasarr.providers.web_server.temp_server_success = True
                     return render_success("FlareSolverr URL saved successfully!", 5)
             except requests.RequestException:
                 pass
@@ -339,6 +473,7 @@ def flaresolverr_config(shared_state):
 
 def jdownloader_config(shared_state):
     app = Bottle()
+    add_static_route(app)
 
     @app.get('/')
     def jd_form():
@@ -444,7 +579,7 @@ def jdownloader_config(shared_state):
                 config.save('password', "")
                 config.save('device', "")
             else:
-                quasarr.providers.web_server.temp_server_success = True
+                kuasarr.providers.web_server.temp_server_success = True
                 return render_success("Credentials set",
                                       15)
 

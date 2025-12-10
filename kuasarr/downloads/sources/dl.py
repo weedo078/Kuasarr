@@ -23,10 +23,42 @@ def startup_initialize_session(shared_state):
 def extract_links_from_post(post_html, host):
     """
     Extract download links from a forum post.
-    Only filecrypt and hide are supported - other link crypters will cause a warning.
+    Supports:
+    - Direct hosters: rapidgator, uploaded, ddownload, nitroflare, turbobit, 1fichier, katfile, mexashare
+    - Container services: filecrypt, hide, keeplinks
+    
+    Returns dict with 'direct' and 'protected' links.
+    - direct: list of direct hoster URLs (can be sent to JDownloader immediately)
+    - protected: list of [url, hoster_name] for container services (need CAPTCHA)
     """
-    links = []
+    direct_links = []
+    protected_links = []
     soup = BeautifulSoup(post_html, 'html.parser')
+
+    # Direct hosters (premium download services) - can be sent directly to JDownloader
+    direct_hosters = {
+        r'rapidgator\.net': 'Rapidgator',
+        r'uploaded\.net': 'Uploaded', 
+        r'uploaded\.to': 'Uploaded',
+        r'ul\.to': 'Uploaded',
+        r'ddownload\.com': 'DDownload',
+        r'nitroflare\.com': 'Nitroflare',
+        r'turbobit\.net': 'Turbobit',
+        r'1fichier\.com': '1Fichier',
+        r'katfile\.com': 'Katfile',
+        r'mexashare\.com': 'Mexashare',
+        r'depositfiles\.com': 'Depositfiles',
+        r'filefactory\.com': 'Filefactory',
+    }
+    
+    # Container/crypter services - need CAPTCHA solving
+    container_services = {
+        r'filecrypt\.cc': 'Filecrypt',
+        r'filecrypt\.co': 'Filecrypt',
+        r'hide\.': 'Hide',
+        r'keeplinks\.org': 'Keeplinks',
+        r'keeplinks\.eu': 'Keeplinks',
+    }
 
     for link in soup.find_all('a', href=True):
         href = link.get('href')
@@ -35,37 +67,87 @@ def extract_links_from_post(post_html, host):
         if href.startswith('/') or host in href:
             continue
 
-        # ONLY support filecrypt and hide
-        if re.search(r'filecrypt\.cc', href, re.IGNORECASE):
-            if href not in links:
-                links.append(href)
-        elif re.search(r'hide\.', href, re.IGNORECASE):
-            if href not in links:
-                links.append(href)
-        elif re.search(r'(linksnappy|relink\.us|links\.snahp|rapidgator|uploaded\.net|nitroflare|turbobit|ddownload\.com|filefactory|katfile|mexashare|keep2share|alfafile|mega\.nz|1fichier)', href, re.IGNORECASE):
-            # These crypters/hosters are NOT supported yet
-            info(f"Unsupported link crypter/hoster found: {href}")
-            info(f"Currently only filecrypt.cc and hide.* are supported. Other crypters may be added later.")
+        # Check for direct hosters first (higher priority)
+        is_direct = False
+        for pattern, hoster_name in direct_hosters.items():
+            if re.search(pattern, href, re.IGNORECASE):
+                if href not in direct_links:
+                    direct_links.append(href)
+                    debug(f"Direct hoster link found ({hoster_name}): {href}")
+                is_direct = True
+                break
+        
+        if is_direct:
+            continue
+            
+        # Check for container services (need CAPTCHA)
+        for pattern, service_name in container_services.items():
+            if re.search(pattern, href, re.IGNORECASE):
+                # Store as [url, service_name] for CAPTCHA queue
+                if not any(p[0] == href for p in protected_links):
+                    protected_links.append([href, service_name])
+                    debug(f"Container link found ({service_name}): {href}")
+                break
 
-    return links
+    if direct_links:
+        info(f"Found {len(direct_links)} direct hoster link(s) and {len(protected_links)} container link(s)")
+    elif protected_links:
+        info(f"Found {len(protected_links)} container link(s), no direct hoster links")
+    
+    return {
+        "direct": direct_links,
+        "protected": protected_links
+    }
 
 
-def extract_password_from_post(post_content, host):
-    """Extract password from post content."""
-    password = f"www.{host}"
+def extract_password_from_post(post_content, host, title=""):
+    """
+    Extract password from post content.
+    Uses hardcoded passwords for known release groups, then falls back to pattern matching.
+    """
+    # Hardcoded passwords for known release groups (check title)
+    title_lower = title.lower() if title else ""
+    
+    known_group_passwords = {
+        # w00t / woot / the wooter
+        'w00t': 'w00t',
+        'woot': 'w00t',
+        'thewooter': 'w00t',
+        'the wooter': 'w00t',
+        'the-wooter': 'w00t',
+        # funxd (password is "funxd" - first part of hostname, like in fx.py)
+        'fun': 'funxd',
+        'FUN': 'funxd',
+        'funxd': 'funxd',
+    }
+    
+    # Check if title contains any known release group
+    for group_pattern, password in known_group_passwords.items():
+        if group_pattern in title_lower:
+            info(f"Password for release group '{group_pattern}': {password}")
+            return password
+    
+    # Fallback: Try to extract from post content
+    post_text = post_content.get_text() if hasattr(post_content, 'get_text') else str(post_content)
     
     password_patterns = [
-        r'(?:Passwort|Password|Pass|PW)[\s:]*([^\s<]+)',
+        r'(?:Passwort|Password|Pass|PW)\s*[:\.\-=]+\s*([^\s<\n\r]+)',
+        r'(?:Passwort|Password|Pass|PW)\.+\s*[:\.\-=]*\s*([^\s<\n\r]+)',
+        r'(?:Entpacken|Unpack|Extract)\s*[:\.\-=]+\s*([^\s<\n\r]+)',
     ]
 
-    post_text = post_content.get_text() if hasattr(post_content, 'get_text') else str(post_content)
     for pattern in password_patterns:
         match = re.search(pattern, post_text, re.IGNORECASE)
-        if match and len(match.groups()) > 0:
-            password = match.group(1)
-            break
+        if match and match.group(1):
+            extracted_pw = match.group(1).strip()
+            if extracted_pw and len(extracted_pw) >= 3 and extracted_pw.lower() not in ['the', 'ist', 'und', 'for']:
+                debug(f"Password extracted from post: '{extracted_pw}'")
+                return extracted_pw
     
-    return password
+    # Default password (forum hostname)
+    default_pw = f"www.{host}"
+    debug(f"No password found, using default: {default_pw}")
+    return default_pw
 
 
 def get_dl_download_links(shared_state, url, mirror, title):
@@ -79,7 +161,11 @@ def get_dl_download_links(shared_state, url, mirror, title):
         title: Release title
     
     Returns:
-        dict with 'links', 'password', and 'title'
+        dict with:
+        - 'direct': list of direct hoster URLs (can be sent to JDownloader immediately)
+        - 'protected': list of [url, hoster_name] for container services (need CAPTCHA)
+        - 'password': extracted password
+        - 'title': release title
     """
     host = shared_state.values["config"]("Hostnames").get(hostname)
     if not host:
@@ -113,18 +199,22 @@ def get_dl_download_links(shared_state, url, mirror, title):
             info(f"Could not find post content in thread: {url}")
             return {}
 
-        links = extract_links_from_post(str(post_content), host)
+        link_data = extract_links_from_post(str(post_content), host)
+        direct_links = link_data.get("direct", [])
+        protected_links = link_data.get("protected", [])
 
-        if not links:
+        if not direct_links and not protected_links:
             info(f"No supported download links found in thread: {url}")
             return {}
 
-        password = extract_password_from_post(post_content, host)
+        password = extract_password_from_post(post_content, host, title)
 
-        debug(f"Found {len(links)} download link(s) for: {title}")
+        total = len(direct_links) + len(protected_links)
+        debug(f"Found {total} download link(s) for: {title} ({len(direct_links)} direct, {len(protected_links)} protected)")
 
         return {
-            "links": links,
+            "direct": direct_links,
+            "protected": protected_links,
             "password": password,
             "title": title
         }

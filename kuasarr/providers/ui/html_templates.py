@@ -2,7 +2,7 @@
 # Kuasarr
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
-import kuasarr.providers.html_images as images
+import kuasarr.providers.ui.html_images as images
 from kuasarr.providers.version import get_version
 
 
@@ -11,8 +11,13 @@ def render_centered_html(inner_content):
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#0d6efd">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <title>kuasarr</title>
         <link rel="icon" href="''' + images.logo + '''" type="image/png">
+        <link rel="manifest" href="/static/manifest.webmanifest">
+        <link rel="apple-touch-icon" href="/static/logo-192.png">
         <style>
             /* Theme variables */
             :root {
@@ -171,6 +176,17 @@ def render_centered_html(inner_content):
         </style>
     </head>'''
 
+    sw_script = '''
+        <script>
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .catch(function(err) {
+                        console.log('SW registration failed:', err);
+                    });
+            }
+        </script>
+    '''
+
     body = f'''
     {head}
     <body>
@@ -182,9 +198,10 @@ def render_centered_html(inner_content):
         <footer>
             kuasarr v.{get_version()}
         </footer>
+        {sw_script}
     </body>
     '''
-    return f'<html>{body}</html>'
+    return f'<!DOCTYPE html><html lang="en">{body}</html>'
 
 
 def render_button(text, button_type="primary", attributes=None):

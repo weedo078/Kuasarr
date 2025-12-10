@@ -254,7 +254,13 @@ def handle_wd(shared_state, title, password, package_id, imdb_id, url, mirror, s
 
 
 def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
-    """Handle DL source downloads."""
+    """
+    Handle DL source downloads.
+    Separates:
+    - Direct hoster links (rapidgator, ddownload, etc.) -> send to JDownloader immediately
+    - Hide.cx links -> decrypt via API (no CAPTCHA needed) -> send to JDownloader
+    - Filecrypt links -> queue for CAPTCHA solving
+    """
     result = get_dl_download_links(shared_state, url, mirror, title)
     
     if not result:
@@ -262,28 +268,78 @@ def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, s
              reason=f'Offline / no links found for "{title}" on DL - "{url}"')
         return {"success": False, "title": title}
     
-    links = result.get("links") or []
+    direct_links = result.get("direct") or []
+    protected_links = result.get("protected") or []
     resolved_password = result.get("password")
 
     if resolved_password:
         password = resolved_password
 
-    if not links:
+    if not direct_links and not protected_links:
         fail(title, package_id, shared_state,
              reason=f'Offline / no links found for "{title}" on DL - "{url}"')
         return {"success": False, "title": title}
 
-    return handle_unprotected(
-        shared_state,
-        title,
-        password,
-        package_id,
-        imdb_id,
-        url,
-        links=links,
-        label='DL',
-        destination_folder=destination_folder,
-    )
+    # Separate links by type:
+    # - hide.cx: decrypt via API (no CAPTCHA)
+    # - filecrypt/keeplinks: need CAPTCHA solving via Kuasarr DBC
+    hide_links = []
+    captcha_links = []
+    for link_item in protected_links:
+        link_url = link_item[0] if isinstance(link_item, list) else link_item
+        link_lower = link_url.lower()
+        
+        if "hide." in link_lower:
+            hide_links.append(link_item)
+        else:
+            # filecrypt and keeplinks need CAPTCHA solving via Kuasarr DBC
+            captcha_links.append(link_item)
+    
+    # Decrypt hide.cx links immediately (no CAPTCHA needed)
+    if hide_links:
+        info(f"DL: Found {len(hide_links)} hide.cx link(s) - decrypting via API")
+        hide_result = decrypt_links_if_hide(shared_state, hide_links)
+        if hide_result.get("status") == "success":
+            decrypted = hide_result.get("results", [])
+            direct_links.extend(decrypted)
+            info(f"DL: Decrypted {len(decrypted)} links from hide.cx")
+
+    # If we have direct hoster links (including decrypted hide.cx), send to JDownloader
+    if direct_links:
+        info(f"DL: Sending {len(direct_links)} link(s) to JDownloader")
+        send_discord_message(shared_state, title=title, case="unprotected", imdb_id=imdb_id, source=url)
+        added = shared_state.download_package(
+            direct_links,
+            title,
+            password,
+            package_id,
+            destination_folder=destination_folder,
+        )
+        if added:
+            StatsHelper(shared_state).increment_package_with_links(direct_links)
+            return {"success": True, "title": title}
+        else:
+            fail(title, package_id, shared_state,
+                 reason=f'Failed to add {len(direct_links)} links for "{title}" to linkgrabber')
+    
+    # If we have container links (filecrypt/keeplinks - need CAPTCHA), queue them
+    if captcha_links:
+        info(f"DL: Found {len(captcha_links)} container link(s) - CAPTCHA required (DBC will solve)")
+        send_discord_message(shared_state, title=title, case="captcha", imdb_id=imdb_id, source=url)
+        blob = json.dumps({
+            "title": title,
+            "links": captcha_links,
+            "size_mb": size_mb,
+            "password": password,
+            "destination_folder": destination_folder,
+        })
+        shared_state.values["database"]("protected").update_store(package_id, blob)
+        return {"success": True, "title": title}
+    
+    # No valid links found
+    fail(title, package_id, shared_state,
+         reason=f'No valid links found for "{title}" on DL - "{url}"')
+    return {"success": False, "title": title}
 
 
 def download(shared_state, request_from, title, url, mirror, size_mb, password, imdb_id=None,

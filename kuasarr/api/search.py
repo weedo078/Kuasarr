@@ -16,7 +16,7 @@ from bottle import Bottle, HTTPError, request, response
 from kuasarr.downloads import download
 from kuasarr.downloads.packages import get_packages
 from kuasarr.providers import shared_state
-from kuasarr.providers.html_templates import render_centered_html, render_button
+from kuasarr.providers.ui.html_templates import render_centered_html, render_button
 from kuasarr.providers.log import debug, info
 from kuasarr.search import get_search_results
 
@@ -840,7 +840,7 @@ def setup_search_routes(app: Bottle) -> None:
         </script>
         """
 
-        from kuasarr.providers import html_images as images  # lazy import um Zyklus zu vermeiden
+        from kuasarr.providers.ui import html_images as images  # lazy import um Zyklus zu vermeiden
         content = (content
                    .replace("{images.logo}", images.logo)
                    .replace("__REFRESH_BUTTON__", refresh_button)

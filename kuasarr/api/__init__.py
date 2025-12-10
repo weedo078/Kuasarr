@@ -5,14 +5,17 @@
 import os
 
 from bottle import Bottle, static_file
+
+# Static files directory (resolved at import time)
+STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
 from kuasarr.api.arr import setup_arr_routes
 from kuasarr.api.captcha import setup_captcha_routes
 from kuasarr.api.config import setup_config
 from kuasarr.api.hosters import setup_hosters_routes
-from kuasarr.api.sponsors_helper import setup_sponsors_helper_routes
+from kuasarr.api.dbc import setup_dbc_routes
 from kuasarr.api.statistics import setup_statistics
 from kuasarr.providers import shared_state
-from kuasarr.providers.html_templates import render_button, render_centered_html
+from kuasarr.providers.ui.html_templates import render_button, render_centered_html
 from kuasarr.providers.web_server import Server
 from kuasarr.storage.config import Config
 
@@ -27,13 +30,23 @@ def get_api(shared_state_dict, shared_state_lock):
     setup_config(app, shared_state)
     setup_hosters_routes(app)
     setup_statistics(app, shared_state)
-    setup_sponsors_helper_routes(app)
+    setup_dbc_routes(app)
 
-    # Serve static files (logo)
+    # Serve static files (logo, PWA assets)
     @app.get('/static/<filename:path>')
     def serve_static(filename):
-        static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
-        return static_file(filename, root=static_dir)
+        # Set correct MIME types for PWA files
+        mimetype = None
+        if filename.endswith('.webmanifest'):
+            mimetype = 'application/manifest+json'
+        elif filename.endswith('.js'):
+            mimetype = 'application/javascript'
+        return static_file(filename, root=STATIC_DIR, mimetype=mimetype)
+
+    # PWA installation page
+    @app.get('/pwa-install')
+    def pwa_install():
+        return static_file('pwa-install.html', root=STATIC_DIR)
 
     @app.get('/')
     def index():

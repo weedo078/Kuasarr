@@ -8,7 +8,7 @@ from bottle import request, response
 
 from kuasarr.providers import shared_state
 from kuasarr.providers.hosters import SUPPORTED_HOSTERS
-from kuasarr.providers.html_templates import render_centered_html, render_button
+from kuasarr.providers.ui.html_templates import render_centered_html, render_button
 from kuasarr.storage.config import Config
 
 

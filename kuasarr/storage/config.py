@@ -45,12 +45,12 @@ class Config(object):
         'FlareSolverr': [
             ("url", "str", ""),
         ],
-        'CaptchaSolverr': [
-            ("url", "str", ""),
-            ("parallel_mode", "bool", "false"),
-            ("parallel_max_slots", "str", "3"),
-            ("timeout", "str", "30"),
-            ("retries", "str", "3"),
+        'DeathByCaptcha': [
+            ("username", "secret", ""),
+            ("password", "secret", ""),
+            ("authtoken", "secret", ""),
+            ("timeout", "str", "120"),
+            ("max_retries", "str", "3"),
             ("retry_backoff", "str", "5"),
         ],        
         'AD': [
@@ -87,6 +87,13 @@ class Config(object):
         ],
         'BlockedHosters': [
             ("hosters", "secret", "")  # Komma-separierte Liste von Hoster-IDs (verschlüsselt)
+        ],
+        'Connection': [
+            ("internal_address", "str", ""),
+            ("external_address", "str", "")
+        ],
+        'PWA': [
+            ("install_prompted", "bool", "false")  # Track if PWA install was prompted on Windows EXE
         ]
     }
     __config__ = []

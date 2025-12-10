@@ -14,7 +14,7 @@ import requests
 from Cryptodome.Cipher import AES
 from bs4 import BeautifulSoup
 
-from kuasarr.providers.cloudflare import is_cloudflare_challenge, ensure_session_cf_bypassed
+from kuasarr.providers.network.cloudflare import is_cloudflare_challenge, ensure_session_cf_bypassed
 from kuasarr.providers.log import info, debug
 
 

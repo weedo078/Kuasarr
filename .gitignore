@@ -7,7 +7,7 @@ __pycache__/
 .pytest_cache/
 
 # Build Tools
-venv
+*venv*/
 
 # PyCharm
 .idea
@@ -44,5 +44,18 @@ ARCHITECTURE*.md
 # Docker
 docker/*
 */docker/
+*docker*
+DOCKERHUB.md
+Dockerfile
+
+
+
 
 tmp-config/
+release/
+dist/
+build/
+*.spec
+scripts/
+
+kuasarr.egg-info/

@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from kuasarr.providers.cloudflare import flaresolverr_get, is_cloudflare_challenge
+from kuasarr.providers.network.cloudflare import flaresolverr_get, is_cloudflare_challenge
 from kuasarr.providers.log import info, debug
 
 

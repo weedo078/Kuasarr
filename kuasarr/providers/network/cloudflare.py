@@ -98,6 +98,7 @@ def ensure_session_cf_bypassed(info, shared_state, session, url, headers):
     """
     try:
         resp = session.get(url, headers=headers, timeout=30)
+        info(f"Initial GET: status={resp.status_code}, CF challenge={is_cloudflare_challenge(resp.text)}")
     except requests.RequestException as e:
         info(f"Initial GET failed: {e}")
         return None, None, None
@@ -106,8 +107,9 @@ def ensure_session_cf_bypassed(info, shared_state, session, url, headers):
     if resp.status_code == 403 or is_cloudflare_challenge(resp.text):
         info("Encountered Cloudflare protection. Solving challenge with FlareSolverr...")
         flaresolverr_result = update_session_via_flaresolverr(info, shared_state, session, url)
-        if not flaresolverr_result:
-            info("FlareSolverr did not return a result.")
+        if not flaresolverr_result or flaresolverr_result.get("error"):
+            error_msg = flaresolverr_result.get("error") if flaresolverr_result else "No result"
+            info(f"FlareSolverr failed: {error_msg}")
             return None, None, None
 
         # update session and possibly user-agent

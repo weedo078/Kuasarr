@@ -447,44 +447,26 @@ def dl_feed(shared_state, start_time, request_from, mirror=None):
     return releases
 
 
-def dl_search(shared_state, start_time, request_from, search_string, season="", episode="", imdb_id=None):
+def dl_search(shared_state, start_time, request_from, search_string, mirror=None, season=None, episode=None):
     """Suche auf data-load.me"""
     releases = []
     dl = shared_state.values["config"]("Hostnames").get("dl")
     password = dl
     
-    # **NEUE DEBUG-AUSGABE: Zeige was genau gesucht wird**
-    info(f"[DL-DEBUG] Empfangen von {request_from}: Suchbegriff = '{search_string}', season = '{season}', episode = '{episode}', imdb_id = '{imdb_id}'")
+    # Check if search_string is an IMDb ID
+    imdb_id = shared_state.is_imdb_id(search_string) if search_string else None
+    
+    info(f"[DL-DEBUG] Received from {request_from}: search='{search_string}', season='{season}', episode='{episode}', imdb_id='{imdb_id}'")
     
     if not dl:
-        debug("Hostname für DL nicht konfiguriert")
+        debug("Hostname for DL not configured")
         return releases
     
-    # **SMARTE SUCHLOGIK: Erstelle search_string wenn leer aber andere Parameter vorhanden**
-    if not search_string and imdb_id:
-        info(f"[DL-DEBUG] Leerer search_string, aber IMDb-ID '{imdb_id}' vorhanden - konvertiere zu Titel")
-        search_string = get_localized_title(shared_state, imdb_id, 'de')
-        if not search_string:
-            info(f"[DL-DEBUG] FEHLER: Konnte keinen Titel aus IMDb-ID {imdb_id} extrahieren")
-            return releases
-        search_string = html.unescape(search_string)
-        info(f"[DL-DEBUG] IMDb-ID {imdb_id} konvertiert zu Titel: '{search_string}'")
-        
-        # Erweitere mit Season/Episode falls vorhanden
-        if season and episode:
-            search_string = f"{search_string} S{int(season):02}E{int(episode):02}"
-            info(f"[DL-DEBUG] Erweitert mit S{int(season):02}E{int(episode):02}: '{search_string}'")
-        elif season:
-            search_string = f"{search_string} S{int(season):02}"
-            info(f"[DL-DEBUG] Erweitert mit S{int(season):02}: '{search_string}'")
-    elif not search_string:
-        info(f"[DL-DEBUG] Keine Suchparameter verfügbar - Suche abgebrochen")
+    if not search_string:
+        info(f"[DL-DEBUG] No search parameters - aborting")
         return releases
     
-    # Überprüfen, ob es sich um eine IMDb-ID handelt (für den Fall dass search_string eine IMDb-ID ist)
-    original_imdb_id = imdb_id
-    if not imdb_id:
-        imdb_id = shared_state.is_imdb_id(search_string)
+    # Convert IMDb ID to localized title
     if imdb_id:
         info(f"[DL-DEBUG] IMDb-ID erkannt: {imdb_id} - konvertiere zu Titel...")
         search_string = get_localized_title(shared_state, imdb_id, 'de')

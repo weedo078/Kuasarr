@@ -3,10 +3,15 @@
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import json
+import os
 import re
+import sys
 from pathlib import Path
 
-import requests
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None
 
 LATEST_RELEASE_LINK = "https://hub.docker.com/r/weedo078/kuasarr/tags"
 
@@ -19,6 +24,9 @@ def get_version():
         Path("version.json"),
         Path("/opt/kuasarr/version.json"),  # Docker-Pfad
     ]
+    frozen_base = getattr(sys, "_MEIPASS", None) or os.environ.get("KUASARR_BASE")
+    if frozen_base:
+        possible_paths.insert(0, Path(frozen_base) / "version.json")
     for path in possible_paths:
         if path.exists():
             try:
@@ -40,6 +48,8 @@ def get_latest_version():
     # Docker Hub API für Tags
     api_url = "https://hub.docker.com/v2/repositories/weedo078/kuasarr/tags?page_size=100"
     
+    if requests is None:
+        raise RuntimeError("requests library is not available")
     try:
         resp = requests.get(api_url, timeout=10)
         if resp.status_code != 200:

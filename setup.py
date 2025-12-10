@@ -2,9 +2,19 @@
 # Kuasarr
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
+import json
+from pathlib import Path
+
 import setuptools
 
-from kuasarr.providers.version import get_version
+
+def read_version():
+    version_path = Path(__file__).resolve().parent / "version.json"
+    data = json.loads(version_path.read_text(encoding="utf-8"))
+    version = data.get("version")
+    if not version:
+        raise RuntimeError("version.json enthält keinen gültigen 'version'-Wert")
+    return version
 
 try:
     with open('README.md', encoding='utf-8') as f:
@@ -19,25 +29,28 @@ with open('requirements.txt') as f:
 
 setuptools.setup(
     name="kuasarr",
-    version=get_version(),
+    version=read_version(),
     author="weedo078",
     author_email="weedo0780@protonmail.com",
     description="kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs, using an additional CaptchaSolverr.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/rix1337/Kuasarr",
+    license="MIT",
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={
         "kuasarr": [
             "static/*.png",
+            "static/*.js",
+            "static/*.html",
+            "static/*.webmanifest",
         ]
     },
     install_requires=required,
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     entry_points={

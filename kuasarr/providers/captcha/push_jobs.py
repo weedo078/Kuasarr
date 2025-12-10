@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Persistente Verwaltung von CapHa-Push-Jobs mit TTL-Bereinigung."""
+"""Persistent management of captcha push jobs with TTL cleanup."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from kuasarr.providers import shared_state
 
-PUSH_JOB_STORE_KEY = "capha_push_jobs"
+PUSH_JOB_STORE_KEY = "captcha_push_jobs"
 PUSH_JOB_TTL_SECONDS = 180  # Analog zu PARALLEL_JOB_TTL_SECONDS
 
 
