@@ -34,7 +34,6 @@ All configuration, Hostnames, Flaresolverr, etc. lives inside `/config/kuasarr.i
 
 - **DeathByCaptcha Integration**: Automatic captcha solving via [DeathByCaptcha](https://deathbycaptcha.com?refid=1237432788a). Configure credentials in `kuasarr.ini` or via environment variables.
 - **Hoster Filtering**: Exclude unwanted mirrors directly via the UI.
-- **No more Sponsors_Helper required**: All captchas are now solved exclusively via DBC.
 
 # Instructions
 1. Set up and run [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) 3.4.4 or later.
