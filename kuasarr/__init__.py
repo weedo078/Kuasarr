@@ -40,7 +40,7 @@ def run():
         shared_state.set_state(shared_state_dict, shared_state_lock)
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("--port", help="Desired Port, defaults to 8080")
+        parser.add_argument("--port", help="Desired Port, defaults to 9999")
         parser.add_argument("--internal_address", help="Must be provided when running in Docker")
         parser.add_argument("--external_address", help="External address for CAPTCHA notifications")
         parser.add_argument("--discord", help="Discord Webhook URL")
@@ -64,19 +64,22 @@ def run():
         print('Automated CAPTCHA solutions are available via the DBC Integration. Simply provide DBC-API-Key in kuasarr.ini. Get yours here: https://deathbycaptcha.com?refid=1237432788a ')
 
         print("\n===== Startup Info =====")
-        port = int('8080')
+        port = int('9999')
         config_path = ""
+        
+        # Port aus CLI-Argument übernehmen (gilt für Docker und Non-Docker)
+        if arguments.port:
+            port = int(arguments.port)
+        
         if os.environ.get('DOCKER'):
             config_path = "/config"
             if not arguments.internal_address:
                 print(
-                    "You must set the INTERNAL_ADDRESS variable to a locally reachable URL, e.g. http://192.168.1.1:8080")
+                    f"You must set the INTERNAL_ADDRESS variable to a locally reachable URL, e.g. http://192.168.1.1:{port}")
                 print("The local URL will be used by Radarr/Sonarr to connect to kuasarr")
                 print("Stopping kuasarr...")
                 sys.exit(1)
         else:
-            if arguments.port:
-                port = int(arguments.port)
             internal_address = f'http://{check_ip()}:{port}'
 
         if arguments.internal_address:

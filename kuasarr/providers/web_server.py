@@ -19,7 +19,7 @@ class NoLoggingWSGIRequestHandler(WSGIRequestHandler):
 
 
 class Server:
-    def __init__(self, wsgi_app, listen='127.0.0.1', port=8080):
+    def __init__(self, wsgi_app, listen='127.0.0.1', port=9999):
         self.wsgi_app = wsgi_app
         self.listen = listen
         self.port = port

@@ -1,0 +1,62 @@
+# Project by https://github.com/rix1337
+
+# Python
+*.pyc
+*.bak
+__pycache__/
+.pytest_cache/
+
+# Build Tools
+*venv*/
+
+# PyCharm
+.idea
+
+# Kuasarr
+*.conf
+*.db
+*.ini
+
+# Handler
+neue_version*/
+*.old
+Quasarr/*
+*.ps1
+*test.py
+*.env
+tests/
+
+# Captcha Helper
+captcha_helper/*
+captcha_helper/
+
+# Quasarr Original Code
+Quasarr/*
+Quasarr/
+
+.cursor
+#.windsurf
+.vscode
+
+config/
+ARCHITECTURE*.md
+
+# Docker
+docker/*
+*/docker/
+*docker*
+DOCKERHUB.md
+Dockerfile
+
+.build.txt
+
+
+
+tmp-config/
+release/
+dist/
+build/
+*.spec
+scripts/
+
+kuasarr.egg-info/

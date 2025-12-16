@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.6.2] - 2025-12-16
+
+### Fixed
+- **Port Handling**: Fixed CLI argument `--port` not being evaluated in Docker mode
+- **Error Message**: Dynamic port in Docker startup error message
+
+---
+
+## [1.6.1] - 2025-12-16
+
+### Changed
+- **Default Port**: Changed from `8080` to `9999`
+  - Updated `kuasarr/__init__.py`, `web_server.py`, `Dockerfile`, `setup.py`
+  - Docker `EXPOSE` and `ENTRYPOINT` now use port `9999`
+
+---
+
+## [1.6.0] - 2025-12-15
+
+### Added
+- **NK Source Integration**: Added `nk` as a new supported hostname/source for search + downloads.
+- **Captcha Bypass Setup Guide**: Added first-time setup instructions (Tampermonkey + userscript) with hide/show toggle (stored in `localStorage`).
+- **Userscript Endpoint**: `GET /captcha/kuasarr.user.js` serves the Tampermonkey userscript used for quick link transfer.
+
+---
+
 ## [1.5.0] - 2025-12-10
 
 ### Added
