@@ -14,6 +14,7 @@ from kuasarr.downloads.sources.by import get_by_download_links
 from kuasarr.downloads.sources.dd import get_dd_download_links
 from kuasarr.downloads.sources.dt import get_dt_download_links
 from kuasarr.downloads.sources.dw import get_dw_download_links
+from kuasarr.downloads.sources.he import get_he_download_links
 from kuasarr.downloads.sources.mb import get_mb_download_links
 from kuasarr.downloads.sources.nk import get_nk_download_links
 from kuasarr.downloads.sources.nx import get_nx_download_links
@@ -367,6 +368,7 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
         'DL': config.get("dl"),
         'DT': config.get("dt"),
         'DW': config.get("dw"),
+        'HE': config.get("he"),
         'MB': config.get("mb"),
         'NK': config.get("nk"),
         'NX': config.get("nx"),
@@ -428,6 +430,15 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
             **handle_protected(
                 shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
                 func=get_dw_download_links, label='DW', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['HE'] and flags['HE'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_unprotected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_he_download_links, label='HE', destination_folder=destination_folder,
             )
         }
 

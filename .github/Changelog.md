@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.7.0] - 2025-12-16
+
+### Added
+- **HE Source Integration**: Added `he` (Heaven-of-Doom) as new supported hostname/source for search + downloads
+  - Based on upstream Quasarr v.1.19.0
+  - Supports IMDb search and feed
+  - Automatic content-protector form handling
+
+---
+
 ## [1.6.2] - 2025-12-16
 
 ### Fixed
