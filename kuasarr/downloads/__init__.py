@@ -15,6 +15,7 @@ from kuasarr.downloads.sources.dd import get_dd_download_links
 from kuasarr.downloads.sources.dt import get_dt_download_links
 from kuasarr.downloads.sources.dw import get_dw_download_links
 from kuasarr.downloads.sources.mb import get_mb_download_links
+from kuasarr.downloads.sources.nk import get_nk_download_links
 from kuasarr.downloads.sources.nx import get_nx_download_links
 from kuasarr.downloads.sources.dl import get_dl_download_links
 from kuasarr.downloads.sources.sf import get_sf_download_links, resolve_sf_redirect
@@ -367,6 +368,7 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
         'DT': config.get("dt"),
         'DW': config.get("dw"),
         'MB': config.get("mb"),
+        'NK': config.get("nk"),
         'NX': config.get("nx"),
         'SF': config.get("sf"),
         'SL': config.get("sl"),
@@ -435,6 +437,15 @@ def download(shared_state, request_from, title, url, mirror, size_mb, password, 
             **handle_protected(
                 shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
                 func=get_mb_download_links, label='MB', destination_folder=destination_folder,
+            )
+        }
+
+    if flags['NK'] and flags['NK'].lower() in url.lower():
+        return {
+            "package_id": package_id,
+            **handle_protected(
+                shared_state, title, password, package_id, imdb_id, url, mirror=mirror, size_mb=size_mb,
+                func=get_nk_download_links, label='NK', destination_folder=destination_folder,
             )
         }
 

@@ -106,10 +106,10 @@ def connection_config(shared_state):
         form_html = f'''
         <form action="/api/connection" method="post">
             <label for="internal_address">Internal URL (Radarr/Sonarr will use this)</label>
-            <input type="text" id="internal_address" name="internal_address" placeholder="http://192.168.0.1:8080" value="{default_internal}"><br>
+            <input type="text" id="internal_address" name="internal_address" placeholder="http://192.168.0.1:9999" value="{default_internal}"><br>
 
             <label for="external_address">External URL (used in notifications, defaults to internal)</label>
-            <input type="text" id="external_address" name="external_address" placeholder="http://mydomain.example:8080" value="{default_external}"><br>
+            <input type="text" id="external_address" name="external_address" placeholder="http://mydomain.example:9999" value="{default_external}"><br>
 
             {render_button("Save", "primary", {"type": "submit"})}
         </form>

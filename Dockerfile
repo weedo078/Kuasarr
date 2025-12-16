@@ -51,7 +51,7 @@ RUN apk del build-base python3-dev || true
 
 # runtime defaults
 VOLUME /config
-EXPOSE 8080
+EXPOSE 9999
 ENV PYTHONUNBUFFERED=1 \
     DOCKER="true" \
     INTERNAL_ADDRESS="" \
@@ -59,4 +59,4 @@ ENV PYTHONUNBUFFERED=1 \
     DISCORD="" \
     HOSTNAMES=""
 
-ENTRYPOINT ["sh", "-c", "kuasarr --port=8080 --internal_address=$INTERNAL_ADDRESS --external_address=$EXTERNAL_ADDRESS --discord=$DISCORD --hostnames=$HOSTNAMES"]
+ENTRYPOINT ["sh", "-c", "kuasarr --port=9999 --internal_address=$INTERNAL_ADDRESS --external_address=$EXTERNAL_ADDRESS --discord=$DISCORD --hostnames=$HOSTNAMES"]
