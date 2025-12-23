@@ -20,9 +20,10 @@ def get_version():
     """Liest die Version aus version.json im Projekt-Root."""
     # Suche version.json relativ zum Package oder im aktuellen Verzeichnis
     possible_paths = [
-        Path(__file__).parent.parent.parent / "version.json",  # kuasarr/providers -> root
+        Path(__file__).parent.parent / "version.json",          # kuasarr/version.json (packaged)
+        Path(__file__).parent.parent.parent / "version.json",   # project root (editable install)
         Path("version.json"),
-        Path("/opt/kuasarr/version.json"),  # Docker-Pfad
+        Path("/opt/kuasarr/version.json"),                      # Docker-Pfad
     ]
     frozen_base = getattr(sys, "_MEIPASS", None) or os.environ.get("KUASARR_BASE")
     if frozen_base:

@@ -6,10 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.8.2] - 2025-12-23
+
+### Added
+- Docs: Ultra.cc installation guide and systemd user update guide (GitHub release wheel workflow).
+
+### Changed
+- WX source: removed feed limit (no artificial `limit=50`) in API call.
+- DL/NK/NX logging: normalized log level entries.
+- Packaging: `version.json` included in package; `__main__.py` entrypoint allows `python -m kuasarr`.
+
+### Fixed
+- DL debug spam reduced; consistent logging schema across integrations.
+
+---
+
+## [1.8.1] - 2025-12-22
+
+### Added
+- **Multi-arch Docker images**: Published images for `linux/amd64`, `linux/arm64`, and `linux/arm/v7`.
+
+### Changed
+- Version set to 1.8.1
+
+---
+
+## [1.8.0] - 2025-12-22
+
+### Added
+- **DL/WX upstream features**: Improved DL password detection (label strategy, code tags, “no password”), real DL RSS feeds (replacing dummy), WX API flow.
+- **hide.cx pipeline**: More robust decryption (accepts string URLs, dedupes), DL fallback to CAPTCHA queue on failure.
+
+### Fixed
+- **Archive/Download status**: Better archive detection, multiple “extraction ok” strings, bytes/ETA finalization only for non-archives.
+- **NK fix**: Mirror whitelist rapidgator/ddownload, ddl.to normalization, mirror from button text.
+- **MyJD**: Retry/backoff on offline/maintenance.
+
+### Changed
+- Version set to 1.8.0
+- **Search/Feed review**: Upstream v1.21.1 feed/pagination refactor reviewed; Kuasarr uses a custom search/feed flow, no changes required.
+
+---
+
 ## [1.7.0] - 2025-12-16
 
 ### Added
-- **HE Source Integration**: Added `he` (Heaven-of-Doom) as new supported hostname/source for search + downloads
+- **HE Source Integration**: Added `he` as new supported hostname/source for search + downloads
   - Based on upstream Quasarr v.1.19.0
   - Supports IMDb search and feed
   - Automatic content-protector form handling

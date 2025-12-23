@@ -13,7 +13,12 @@ Kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decr
 Kuasarr pretends to be both `Newznab Indexer` and `SABnzbd client`. Therefore, do not try to use it with real usenet
 indexers or download clients. It simply does not know what NZB or torrent files are.
 
-
+## Table of Contents
+- [Quick Start](#quick-start)
+- [Improvements](#improvements)
+- [Instructions](#instructions)
+- [Kuasarr Docs](#kuasarr-docs)
+- [License](#license)
 
 ## Quick Start
 
@@ -26,6 +31,7 @@ docker run -d \
   -v /path/to/config/:/config \
   -e INTERNAL_ADDRESS=http://192.168.0.1:8080 \
   -e EXTERNAL_ADDRESS=http://192.168.0.1:8080 \
+  -e TZ=Europe/Amsterdam \
   weedo078/kuasarr:latest
 ```
 
@@ -35,6 +41,7 @@ All configuration, Hostnames, Flaresolverr, etc. lives inside `/config/kuasarr.i
 
 - **DeathByCaptcha Integration**: Automatic captcha solving via [DeathByCaptcha](https://deathbycaptcha.com?refid=1237432788a). Configure credentials in `kuasarr.ini` or via environment variables.
 - **Hoster Filtering**: Exclude unwanted mirrors directly via the UI.
+- **Multi-arch Docker images**: Official images now published for `linux/amd64`, `linux/arm64`, and `linux/arm/v7` (from v1.8.1).
 
 # Instructions
 1. Set up and run [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) 3.4.4 or later.
@@ -56,7 +63,7 @@ Tell Kuasarr which sites to search for releases. It requires at least one valid 
 
 > - By default, Kuasarr does **not** know which sites to scrape for download links.  
 > - The setup will guide you through the process of providing valid hostnames for Kuasarr to scrape.  
-> - Do **not** ask for help here if you do not know which hostnames to use. Picking them is solely your responsibility.  
+> - If you need help, reach out on Matrix: [@kuasarr-support:envs.net](https://matrix.to/#/@kuasarr-support:envs.net).  
 > - You may check sites like [Pastebin](https://pastebin.com/search?q=hostnames+Kuasarr) for user‑submitted suggestions.
 
 ---
@@ -142,6 +149,7 @@ docker run -d \
   -e INTERNAL_ADDRESS=http://192.168.0.1:8080 \
   -e DBC_AUTHTOKEN=your_authtoken \
   -e DBC_PASSWORD=your_password \
+  -e TZ=Europe/Amsterdam \
   weedo078/kuasarr:latest
 ```
 
@@ -152,6 +160,34 @@ Available environment variables:
 
 Get your DBC account at: [deathbycaptcha.com](https://deathbycaptcha.com?refid=1237432788a)
 
+## WebUI Authentication (Optional)
+
+Protect the Kuasarr WebUI with HTTP Basic Auth by setting environment variables:
+
+```bash
+docker run -d \
+  --name kuasarr \
+  -p 8080:8080 \
+  -v /path/to/config/:/config \
+  -e INTERNAL_ADDRESS=http://192.168.0.1:8080 \
+  -e KUASARR_WEBUI_USER=admin \
+  -e KUASARR_WEBUI_PASS=your_secure_password \
+  -e TZ=Europe/Amsterdam \
+  weedo078/kuasarr:latest
+```
+
+**Important:**
+- If **both** `KUASARR_WEBUI_USER` and `KUASARR_WEBUI_PASS` are set, the WebUI requires login.
+- If either is missing or empty, authentication is **disabled** (backwards compatible).
+- **API endpoints** (`/api`, `/download/`, `/dbc/api/`) are **never** protected by BasicAuth – Radarr/Sonarr continue to work with the API key only.
+- For production use, always run behind HTTPS (reverse proxy recommended).
+
+For systemd deployments, add to your unit file:
+```ini
+Environment=KUASARR_WEBUI_USER=admin
+Environment=KUASARR_WEBUI_PASS=your_secure_password
+```
+
 ## Install as PWA (Progressive Web App)
 
 Kuasarr can be installed as a standalone app on your device:
@@ -161,6 +197,15 @@ Kuasarr can be installed as a standalone app on your device:
 3. **iOS**: Open Kuasarr in Safari, tap Share → "Add to Home Screen"
 
 > **Note**: PWA installation requires HTTPS. If running locally without TLS, use a reverse proxy (e.g., Nginx, Caddy) or access via `localhost`.
+
+---
+
+# Kuasarr Docs
+
+- [Ultra.cc Installation](./ultracc_install.md)
+- [Update Guide (systemd --user)](./update_guide.md)
+
+---
 
 ## License
 

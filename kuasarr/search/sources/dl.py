@@ -6,23 +6,25 @@
 import html
 import re
 import time
+import warnings
 from base64 import urlsafe_b64encode
 from datetime import datetime, timedelta
 import random
 from urllib.parse import urljoin
+from html import unescape
 
 import requests
 from bs4 import BeautifulSoup
+from bs4 import XMLParsedAsHTMLWarning
 
 from kuasarr.providers.imdb_metadata import get_localized_title
 from kuasarr.providers.log import info, debug
-from kuasarr.providers.sessions.dl import fetch_via_requests_session
+from kuasarr.providers.sessions.dl import fetch_via_requests_session, retrieve_and_validate_session, invalidate_session
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+hostname = "dl"
 
 def dl_flexible_string_match(search_string, title):
-    """
-    DL-spezifische flexible String-Matching-Funktion.
-    Erkennt auch zusammengeschriebene Titel wie 'BetterCallSaulS01' für 'Better Call Saul'
-    """
     from kuasarr.providers.shared_state import sanitize_string
     
     sanitized_search_string = sanitize_string(search_string)
@@ -341,109 +343,110 @@ def extract_search_id(shared_state):
         return "34811168"
 
 
+def normalize_title_for_sonarr(title):
+    """
+    Normalize title for Sonarr by replacing spaces with dots.
+    """
+    title = title.replace(' ', '.')
+    title = re.sub(r'\s*-\s*', '-', title)
+    title = re.sub(r'\.\-\.', '-', title)
+    title = re.sub(r'\.{2,}', '.', title)
+    title = title.strip('.')
+    return title
+
+
 def dl_feed(shared_state, start_time, request_from, mirror=None):
-    """Feed-Funktion für data-load.me - liefert Dummy-Releases für Sonarr-Indexer-Validierung"""
+    """
+    Parse the RSS feed and return real releases.
+    """
     releases = []
-    dl = shared_state.values["config"]("Hostnames").get("dl")
-    password = dl
-    
-    if not dl:
-        debug("Hostname für DL nicht konfiguriert")
+    host = shared_state.values["config"]("Hostnames").get("dl")
+
+    if not host:
+        info(f"{hostname}: hostname not configured")
         return releases
-    
-    info(f"[DL-FEED] Dummy-Feed-Anfrage empfangen von {request_from}")
-    
-    # Bestimme welche Art von Content wir brauchen
-    is_radarr = "Radarr" in request_from
-    content_type = "Filme" if is_radarr else "Serien"
-    info(f"[DL-FEED] Liefere Dummy-{content_type} für Indexer-Validierung")
-    
+
     try:
-        from datetime import datetime
-        from base64 import urlsafe_b64encode
-        
-        # Erstelle Dummy-Releases für Indexer-Validierung
-        if is_radarr:
-            # Dummy-Filme für Radarr
-            dummy_releases = [
-                {
-                    'title': 'The Matrix 1999 German DL 1080p BluRay x264-DUMMY',
-                    'url': f'https://{dl}/threads/the-matrix-1999-german-dl-1080p-bluray-x264-dummy.123456/',
-                    'size_bytes': 8 * 1024 * 1024 * 1024,  # 8GB
-                },
-                {
-                    'title': 'Inception 2010 German DL 1080p BluRay x265-DUMMY',
-                    'url': f'https://{dl}/threads/inception-2010-german-dl-1080p-bluray-x265-dummy.123457/',
-                    'size_bytes': 6 * 1024 * 1024 * 1024,  # 6GB
-                },
-                {
-                    'title': 'Interstellar 2014 German DL 2160p UHD BluRay x265-DUMMY',
-                    'url': f'https://{dl}/threads/interstellar-2014-german-dl-2160p-uhd-bluray-x265-dummy.123458/',
-                    'size_bytes': 15 * 1024 * 1024 * 1024,  # 15GB
-                }
-            ]
-        else:
-            # Dummy-Serien für Sonarr  
-            dummy_releases = [
-                {
-                    'title': 'Breaking Bad S01 German DL 1080p BluRay x264-DUMMY',
-                    'url': f'https://{dl}/threads/breaking-bad-s01-german-dl-1080p-bluray-x264-dummy.123459/',
-                    'size_bytes': 12 * 1024 * 1024 * 1024,  # 12GB
-                },
-                {
-                    'title': 'Better Call Saul S01 German DL 1080p BluRay x265-DUMMY', 
-                    'url': f'https://{dl}/threads/better-call-saul-s01-german-dl-1080p-bluray-x265-dummy.123460/',
-                    'size_bytes': 9 * 1024 * 1024 * 1024,  # 9GB
-                },
-                {
-                    'title': 'Game of Thrones S01 German DL 1080p BluRay x264-DUMMY',
-                    'url': f'https://{dl}/threads/game-of-thrones-s01-german-dl-1080p-bluray-x264-dummy.123461/',
-                    'size_bytes': 18 * 1024 * 1024 * 1024,  # 18GB
-                }
-            ]
-        
-        info(f"[DL-FEED] Erstelle {len(dummy_releases)} Dummy-{content_type} für Indexer-Validierung")
-        
-        # Erstelle Release-Objekte aus Dummy-Daten
-        for i, dummy_data in enumerate(dummy_releases):
+        sess = retrieve_and_validate_session(shared_state)
+        if not sess:
+            info(f"{hostname}: Could not retrieve valid session for {host}")
+            return releases
+
+        rss_url = f'https://www.{host}/forums/-/index.rss'
+        response = sess.get(rss_url, timeout=30)
+
+        if response.status_code != 200:
+            info(f"{hostname}: RSS feed returned status {response.status_code}")
+            return releases
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+        items = soup.find_all('item')
+
+        if not items:
+            info(f"{hostname}: No entries found in RSS feed")
+            return releases
+
+        for item in items:
             try:
-                title = dummy_data['title']
-                detail_url = dummy_data['url']
-                size_bytes = dummy_data['size_bytes']
-                
-                # Datum (aktuelles Datum)
-                published = datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0000')
-                
-                # Payload für JDownloader erstellen (Dummy-URL als Placeholder)
-                payload = urlsafe_b64encode(f"{title}|{detail_url}|dl|{size_bytes//1024//1024}|{password}|".encode("utf-8")).decode("utf-8")
-                jd_link = f"{shared_state.values['internal_address']}/download/?payload={payload}"
-                
+                title_tag = item.find('title')
+                if not title_tag:
+                    continue
+
+                title = title_tag.get_text(strip=True)
+                if not title:
+                    continue
+
+                title = unescape(title)
+                title = title.replace(']]>', '').replace('<![CDATA[', '')
+                title = normalize_title_for_sonarr(title)
+
+                item_text = item.get_text()
+                thread_url = None
+                match = re.search(r'https://[^\s]+/threads/[^\s]+', item_text)
+                if match:
+                    thread_url = match.group(0)
+                if not thread_url:
+                    continue
+
+                pub_date = item.find('pubdate')
+                if pub_date:
+                    date_str = pub_date.get_text(strip=True)
+                else:
+                    date_str = datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+                mb = 0
+                imdb_id = None
+                password = ""
+
+                payload = urlsafe_b64encode(
+                    f"{title}|{thread_url}|{mirror}|{mb}|{password}|{imdb_id or ''}".encode("utf-8")
+                ).decode("utf-8")
+                link = f"{shared_state.values['internal_address']}/download/?payload={payload}"
+
                 releases.append({
                     "details": {
                         "title": title,
-                        "hostname": "dl",
+                        "hostname": hostname,
+                        "imdb_id": imdb_id,
+                        "link": link,
                         "mirror": mirror,
-                        "imdb_id": "",
-                        "link": jd_link,  # JDownloader-Link (für Downloads)
-                        "size": size_bytes,
-                        "date": published,
-                        "source": detail_url  # Detail-URL (für Sonarr-Clicks)
+                        "size": mb * 1024 * 1024,
+                        "date": date_str,
+                        "source": thread_url
                     },
                     "type": "protected"
                 })
-                
-                debug(f"âœ“ Dummy-{content_type}: {title} ({size_bytes//1024//1024} MB)")
-                
+
             except Exception as e:
-                debug(f"Fehler beim Erstellen von Dummy-Release '{title}': {e}")
+                debug(f"{hostname}: error parsing RSS entry: {e}")
                 continue
-    
+
     except Exception as e:
-        info(f"Fehler beim Laden des DL-Feeds: {e}")
-    
-    elapsed_time = time.time() - start_time
-    info(f"[DL-FEED] {len(releases)} {content_type}-Releases in {elapsed_time:.2f} Sekunden gefunden")
-    
+        info(f"{hostname}: RSS feed error: {e}")
+        invalidate_session(shared_state)
+
+    elapsed = time.time() - start_time
+    debug(f"Time taken: {elapsed:.2f}s ({hostname})")
     return releases
 
 
@@ -456,31 +459,34 @@ def dl_search(shared_state, start_time, request_from, search_string, mirror=None
     # Check if search_string is an IMDb ID
     imdb_id = shared_state.is_imdb_id(search_string) if search_string else None
     
-    info(f"[DL-DEBUG] Received from {request_from}: search='{search_string}', season='{season}', episode='{episode}', imdb_id='{imdb_id}'")
+    if search_string:
+        info(f"{hostname}: search request from {request_from} term='{search_string}' season='{season}' episode='{episode}' imdb='{imdb_id}'")
+
+    debug(f"[DL-DEBUG] Received from {request_from}: search='{search_string}', season='{season}', episode='{episode}', imdb_id='{imdb_id}'")
     
     if not dl:
         debug("Hostname for DL not configured")
         return releases
     
     if not search_string:
-        info(f"[DL-DEBUG] No search parameters - aborting")
+        debug(f"[DL-DEBUG] No search parameters - aborting")
         return releases
     
     # Convert IMDb ID to localized title
     if imdb_id:
-        info(f"[DL-DEBUG] IMDb-ID erkannt: {imdb_id} - konvertiere zu Titel...")
+        debug(f"[DL-DEBUG] IMDb-ID erkannt: {imdb_id} - konvertiere zu Titel...")
         search_string = get_localized_title(shared_state, imdb_id, 'de')
         if not search_string:
-            info(f"[DL-DEBUG] FEHLER: Konnte keinen Titel aus IMDb-ID {imdb_id} extrahieren")
+            debug(f"[DL-DEBUG] FEHLER: Konnte keinen Titel aus IMDb-ID {imdb_id} extrahieren")
             return releases
         search_string = html.unescape(search_string)
-        info(f"[DL-DEBUG] IMDb-ID {imdb_id} konvertiert zu Titel: '{search_string}'")
+        debug(f"[DL-DEBUG] IMDb-ID {imdb_id} konvertiert zu Titel: '{search_string}'")
     else:
-        info(f"[DL-DEBUG] Normale Textsuche: '{search_string}'")
+        debug(f"[DL-DEBUG] Normale Textsuche: '{search_string}'")
     
     try:
         # Moderne Formular-Simulation (wie im Demo erfolgreich getestet)
-        info(f"[DL-DEBUG] Starte Such-Formular-Simulation für: '{search_string}'")
+        debug(f"[DL-DEBUG] Starte Such-Formular-Simulation für: '{search_string}'")
         
         # SCHRITT 1: Lade die Such-Seite mit dem Suchbegriff
         initial_search_url = f"https://{dl}/search/?q={search_string}"
@@ -578,7 +584,7 @@ def dl_search(shared_state, start_time, request_from, search_string, mirror=None
                 return releases
         
         response.raise_for_status()
-        info(f"[DL-DEBUG] Suchergebnisse geladen: {response.url}")
+        debug(f"[DL-DEBUG] Suchergebnisse geladen: {response.url}")
         
         soup = BeautifulSoup(response.text, "html.parser")
         
@@ -587,7 +593,7 @@ def dl_search(shared_state, start_time, request_from, search_string, mirror=None
         
         # METHODE 1: Moderne data-load.me Struktur (block-row + contentRow)
         block_rows = soup.find_all('li', class_='block-row')
-        info(f"[DL-DEBUG] Gefundene block-row Elemente: {len(block_rows)}")
+        debug(f"[DL-DEBUG] Gefundene block-row Elemente: {len(block_rows)}")
         
         for row in block_rows:
             content_row = row.find('div', class_='contentRow')
@@ -597,13 +603,13 @@ def dl_search(shared_state, start_time, request_from, search_string, mirror=None
         # METHODE 2: Fallback für structItem-Struktur
         if not results:
             struct_items = soup.find_all('div', class_='structItem')
-            info(f"[DL-DEBUG] Fallback: Gefundene structItem Elemente: {len(struct_items)}")
+            debug(f"[DL-DEBUG] Fallback: Gefundene structItem Elemente: {len(struct_items)}")
             results.extend(struct_items)
         
         # METHODE 3: Generischer Fallback für h3-Elemente mit Links
         if not results:
             h3_elements = soup.find_all('h3')
-            info(f"[DL-DEBUG] Fallback: Gefundene h3 Elemente: {len(h3_elements)}")
+            debug(f"[DL-DEBUG] Fallback: Gefundene h3 Elemente: {len(h3_elements)}")
             for h3 in h3_elements:
                 if h3.find('a'):
                     results.append(h3.parent)
@@ -612,13 +618,13 @@ def dl_search(shared_state, start_time, request_from, search_string, mirror=None
         if not results:
             sanitized_search = re.escape(search_string.lower())
             title_links = soup.find_all('a', string=re.compile(sanitized_search, re.IGNORECASE))
-            info(f"[DL-DEBUG] Fallback: Gefundene titel-spezifische Links: {len(title_links)}")
+            debug(f"[DL-DEBUG] Fallback: Gefundene titel-spezifische Links: {len(title_links)}")
             for link in title_links:
                 parent = link.parent
                 if parent.name in ['h3', 'h4', 'div']:
                     results.append(parent)
         
-        info(f"[DL-DEBUG] Insgesamt extrahierte Such-Ergebnisse: {len(results)}")
+        debug(f"[DL-DEBUG] Insgesamt extrahierte Such-Ergebnisse: {len(results)}")
         
         # Jetzt die Ergebnisse verarbeiten
         processed_count = 0
@@ -825,10 +831,10 @@ def dl_search(shared_state, start_time, request_from, search_string, mirror=None
                 debug(f"Fehler beim Parsen eines Suchergebnisses: {e}")
     
     except Exception as e:
-        info(f"Fehler bei der DL-Suche: {e}")
+        info(f"{hostname}: Fehler bei der DL-Suche: {e}")
     
     elapsed_time = time.time() - start_time
-    debug(f"Zeit: {elapsed_time:.2f} Sekunden (dl)")
+    debug(f"Zeit: {elapsed_time:.2f} Sekunden ({hostname})")
     
     return releases 
 
