@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Quasarr
-# Project by https://github.com/rix1337
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import os
 import sys
@@ -65,7 +65,7 @@ def path_config(shared_state):
                            config_form_html)
 
     def set_config_path(config_path):
-        config_path_file = "Quasarr.conf"
+        config_path_file = "kuasarr.conf"
 
         if not config_path:
             config_path = current_path
@@ -89,7 +89,7 @@ def path_config(shared_state):
         return render_success(f'Config path set to: "{config_path}"',
                               5)
 
-    info(f'Starting web server for config at: "{shared_state.values['internal_address']}".')
+    info(f"Starting web server for config at: \"{shared_state.values['internal_address']}\".")
     info("Please set desired config path there!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
@@ -297,7 +297,7 @@ def hostnames_config(shared_state):
     def set_hostnames():
         return save_hostnames(shared_state)
 
-    info(f'Hostnames not set. Starting web server for config at: "{shared_state.values['internal_address']}".')
+    info(f"Hostnames not set. Starting web server for config at: \"{shared_state.values['internal_address']}\".")
     info("Please set at least one valid hostname there!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
@@ -400,6 +400,10 @@ def hostname_credentials_config(shared_state, shorthand, domain):
                 if kuasarr.providers.sessions.dd.create_and_persist_session(shared_state):
                     kuasarr.providers.web_server.temp_server_success = True
                     return render_success(f"{sh} credentials set successfully", 5)
+            if sh.lower() == "dl":
+                if kuasarr.providers.sessions.dl.create_and_persist_session(shared_state):
+                    kuasarr.providers.web_server.temp_server_success = True
+                    return render_success(f"{sh} credentials set successfully", 5)
             if sh.lower() == "nx":
                 if kuasarr.providers.sessions.nx.create_and_persist_session(shared_state):
                     kuasarr.providers.web_server.temp_server_success = True
@@ -411,7 +415,7 @@ def hostname_credentials_config(shared_state, shorthand, domain):
 
     info(
         f'"{shorthand.lower()}" credentials required to access download links. '
-        f'Starting web server for config at: "{shared_state.values['internal_address']}".')
+        f"Starting web server for config at: \"{shared_state.values['internal_address']}\".")
     info(f"If needed register here: 'https://{domain}'")
     info("Please set your credentials now, to allow Quasarr to launch!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
@@ -587,7 +591,7 @@ def jdownloader_config(shared_state):
 
     info(
         f'My-JDownloader-Credentials not set. '
-        f'Starting web server for config at: "{shared_state.values['internal_address']}".')
+        f"Starting web server for config at: \"{shared_state.values['internal_address']}\".")
     info("If needed register here: 'https://my.jdownloader.org/login.html#register'")
     info("Please set your credentials now, to allow Quasarr to launch!")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()

@@ -7,6 +7,7 @@ import time
 from base64 import urlsafe_b64encode
 from datetime import datetime, timedelta
 from html import unescape
+from typing import Optional
 from urllib.parse import urljoin, quote_plus
 
 from bs4 import BeautifulSoup
@@ -45,7 +46,7 @@ def convert_to_rss_date(date_str: str) -> str:
         raise ValueError(f"Could not parse date: {date_str}")
 
 
-def parse_relative_date(raw: str) -> datetime | None:
+def parse_relative_date(raw: str) -> Optional[datetime]:
     # German pattern: "vor X Einheit(en)"
     german_match = re.match(r"vor\s+(\d+)\s+(\w+)", raw, re.IGNORECASE)
     if german_match:
@@ -238,7 +239,7 @@ def al_feed(shared_state, start_time, request_from, mirror=None):
     return releases
 
 
-def extract_season(title: str) -> int | None:
+def extract_season(title: str) -> Optional[int]:
     match = re.search(r'(?i)(?:^|[^a-zA-Z0-9])S(\d{1,4})(?!\d)', title)
     if match:
         return int(match.group(1))

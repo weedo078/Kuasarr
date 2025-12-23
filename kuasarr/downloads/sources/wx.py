@@ -56,11 +56,13 @@ def get_wx_download_links(shared_state, url, mirror, title):
 
     headers = {
         'User-Agent': shared_state.values.get("user_agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        session = requests.Session()
+        response = session.get(url, headers=headers, timeout=30)
 
         if response.status_code != 200:
             info(f"{hostname.upper()}: Failed to load page: {url} (Status: {response.status_code})")
@@ -71,45 +73,64 @@ def get_wx_download_links(shared_state, url, mirror, title):
         if slug_match:
             slug = slug_match.group(1)
 
-            # Try to fetch via API
-            api_url = f'https://api.{host}/release/{slug}'
+            # Try API (start/d/<slug>) – matches Upstream behaviour
+            api_url = f'https://api.{host}/start/d/{slug}'
             try:
-                api_response = requests.get(api_url, headers={'User-Agent': shared_state.values["user_agent"]},
-                                            timeout=10)
+                api_headers = {
+                    'User-Agent': shared_state.values["user_agent"],
+                    'Accept': 'application/json'
+                }
+                debug(f"{hostname.upper()}: Fetching API data from: {api_url}")
+                api_response = session.get(api_url, headers=api_headers, timeout=30)
                 if api_response.status_code == 200:
                     data = api_response.json()
 
-                    links = []
-                    if 'downloads' in data:
-                        for download in data['downloads']:
-                            link = download.get('url') or download.get('link')
-                            if link:
-                                # Check if supported
-                                if re.search(r'filecrypt\.cc|hide\.', link, re.IGNORECASE):
-                                    links.append(link)
-                                else:
-                                    info(f"Unsupported link from API: {link}")
-                    elif 'links' in data:
-                        for link_item in data['links']:
-                            link = link_item if isinstance(link_item, str) else link_item.get('url')
-                            if link:
-                                # Check if supported
-                                if re.search(r'filecrypt\.cc|hide\.', link, re.IGNORECASE):
-                                    links.append(link)
-                                else:
-                                    info(f"Unsupported link from API: {link}")
+                    if 'item' in data and 'releases' in data['item']:
+                        releases = data['item']['releases']
 
-                    if links:
-                        password = f"www.{host}"
-                        debug(f"{hostname.upper()}: Found {len(links)} download link(s) via API for: {title}")
+                        # Find release matching title
+                        matching_release = None
+                        for release in releases:
+                            if release.get('fulltitle') == title:
+                                matching_release = release
+                                break
 
-                        return {
-                            "links": links,
-                            "password": password,
-                            "title": title
-                        }
-            except:
-                pass
+                        if matching_release:
+                            crypted_links = matching_release.get('crypted_links', {}) or {}
+                            links = []
+
+                            def _append_if_supported(link, hoster_label):
+                                if re.search(r'hide\.', link, re.IGNORECASE) or re.search(r'filecrypt\.', link, re.IGNORECASE):
+                                    links.append(link)
+                                    debug(f"{hostname.upper()}: Found {hoster_label} link")
+                                else:
+                                    info(f"{hostname.upper()}: Unsupported link from API: {link}")
+
+                            if mirror:
+                                matched_hoster = None
+                                for hoster in crypted_links.keys():
+                                    if mirror.lower() in hoster.lower() or hoster.lower() in mirror.lower():
+                                        matched_hoster = hoster
+                                        break
+                                if matched_hoster:
+                                    _append_if_supported(crypted_links.get(matched_hoster, ""), matched_hoster)
+                                else:
+                                    info(f"{hostname.upper()}: Mirror '{mirror}' not found in available hosters: {list(crypted_links.keys())}")
+                            else:
+                                for hoster, link in crypted_links.items():
+                                    _append_if_supported(link, hoster)
+
+                            if links:
+                                password = f"www.{host}"
+                                return {"links": links, "password": password, "title": title}
+                            else:
+                                info(f"{hostname.upper()}: No supported crypted links found for: {title}")
+                                return {}
+                        else:
+                            info(f"{hostname.upper()}: No release found matching title: {title}")
+                            return {}
+            except Exception as e:
+                debug(f"{hostname.upper()}: API fetch error: {e}")
 
         # Fallback to HTML parsing
         links = extract_links_from_page(response.text, host)

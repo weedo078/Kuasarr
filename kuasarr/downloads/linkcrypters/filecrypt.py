@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Quasarr
-# Project by https://github.com/rix1337
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import base64
 import json
@@ -191,9 +191,55 @@ def get_filecrypt_links(shared_state, token, title, url, password=None, mirror=N
 
     url = output.url
     soup = BeautifulSoup(output.text, 'html.parser')
+    # Helper to apply a password and refresh soup/output (with optional CF-bypass re-check)
+    def _apply_password(pwd, current_output):
+        try:
+            post_headers = {
+                'User-Agent': shared_state.values["user_agent"],
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            new_output = session.post(current_output.url, data={password_field: pwd}, headers=post_headers, timeout=30)
+        except requests.RequestException as e:
+            info(f"POSTing password failed: {e}")
+            return None, None
+
+        # After posting, Cloudflare could reappear; ensure still bypassed
+        if new_output.status_code == 403 or is_cloudflare_challenge(new_output.text):
+            info("Encountered Cloudflare after password POST. Re-running FlareSolverr...")
+            new_session, new_headers, new_output = ensure_session_cf_bypassed(info, shared_state, session, new_output.url,
+                                                                              headers)
+            if not new_session or not new_output:
+                return None, None
+        new_soup = BeautifulSoup(new_output.text, 'html.parser')
+        return new_output, new_soup
+
     if bool(soup.find_all("input", {"id": "p4assw0rt"})):
-        info(f"Password was wrong or missing. Could not get links for {title}")
-        return False
+        info(f"Password was wrong or missing for {title}. Trying fallbacks...")
+
+        # Determine fallback passwords (serienfans.org default, funxd via custom logo)
+        fallback_pw = "serienfans.org"
+        try:
+            img = soup.find("img", {"id": "customlogo"})
+            if img and img.get("src") and "/css/custom/f38ed.png" in img.get("src"):
+                fallback_pw = "funxd"
+        except Exception as e:
+            debug(f"Password logo detection failed: {e}")
+
+        tried_pw = []
+
+        if password_field:
+            for pwd in [password or "", fallback_pw]:
+                if not pwd or pwd in tried_pw:
+                    continue
+                tried_pw.append(pwd)
+                info(f"Trying fallback password: {pwd}")
+                output, soup = _apply_password(pwd, output)
+                if output and soup and not bool(soup.find_all("input", {"id": "p4assw0rt"})):
+                    break
+
+        if not output or not soup or bool(soup.find_all("input", {"id": "p4assw0rt"})):
+            info(f"Password could not be applied for {title}")
+            return False
 
     no_captcha_present = bool(soup.find("form", {"class": "cnlform"}))
     if no_captcha_present:

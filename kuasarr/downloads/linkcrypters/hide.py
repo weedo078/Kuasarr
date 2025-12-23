@@ -55,7 +55,7 @@ def unhide_links(shared_state, url):
         return []
 
 
-def decrypt_links_if_hide(shared_state: Any, items: List[List[str]]) -> Dict[str, Any]:
+def decrypt_links_if_hide(shared_state: Any, items: List[Any]) -> Dict[str, Any]:
     """
     Resolve redirects and decrypt hide.cx links from a list of item lists.
 
@@ -64,7 +64,7 @@ def decrypt_links_if_hide(shared_state: Any, items: List[List[str]]) -> Dict[str
       - any additional metadata at subsequent indices (ignored here)
 
     :param shared_state: State object required by unhide_links function
-    :param items: List of lists, where each inner list has the URL at index 0
+    :param items: List of lists or strings. If list, URL at index 0. If string, treated as URL.
     :return: Dict with 'status' and 'results' (flat list of decrypted link URLs)
     """
     if not items:
@@ -76,7 +76,8 @@ def decrypt_links_if_hide(shared_state: Any, items: List[List[str]]) -> Dict[str
 
     hide_urls: List[str] = []
     for item in items:
-        original_url = item[0]
+        # Support both list/tuple with URL at index 0 and raw string URLs
+        original_url = item[0] if isinstance(item, (list, tuple)) else item
         if not original_url:
             debug(f"Skipping item without URL: {item}")
             continue
@@ -120,7 +121,15 @@ def decrypt_links_if_hide(shared_state: Any, items: List[List[str]]) -> Dict[str
         info(f"Could not decrypt any links from hide.cx URLs.")
         return {"status": "error", "results": []}
 
-    return {"status": "success", "results": decrypted_links}
+    # Deduplicate while preserving order
+    unique_links = []
+    seen = set()
+    for l in decrypted_links:
+        if l not in seen:
+            unique_links.append(l)
+            seen.add(l)
+
+    return {"status": "success", "results": unique_links}
 
 
 

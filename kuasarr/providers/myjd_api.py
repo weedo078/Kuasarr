@@ -400,6 +400,26 @@ class Downloads:
         return resp
 
 
+class Extraction:
+    """
+    Extraction-API für Archive (MyJDownloader).
+    """
+
+    def __init__(self, device):
+        self.device = device
+        self.url = "/extraction"
+
+    def get_archive_info(self, link_ids=None, package_ids=None):
+        """
+        Liefert Archiv-Status für Links/Packages.
+        """
+        link_ids = link_ids or []
+        package_ids = package_ids or []
+        params = [link_ids, package_ids]
+        resp = self.device.action(self.url + "/getArchiveInfo", params)
+        return resp
+
+
 class Jddevice:
     """
     Class that represents a JDownloader device and it's functions
@@ -418,6 +438,7 @@ class Jddevice:
         self.config = Config(self)
         self.linkgrabber = Linkgrabber(self)
         self.downloads = Downloads(self)
+        self.extraction = Extraction(self)
         self.downloadcontroller = DownloadController(self)
         self.update = Update(self)
         self.__direct_connection_info = None

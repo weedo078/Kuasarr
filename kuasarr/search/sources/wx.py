@@ -237,8 +237,8 @@ def wx_feed(shared_state, start_time, request_from, mirror=None):
     headers = {'User-Agent': shared_state.values["user_agent"]}
     
     try:
-        # Try API first
-        api_url = f"https://api.{wx}/releases?type={feed_type}&limit=50"
+        # Try API first (no artificial limit to align with upstream)
+        api_url = f"https://api.{wx}/releases?type={feed_type}"
         response = requests.get(api_url, headers=headers, timeout=10)
         
         if response.status_code == 200:

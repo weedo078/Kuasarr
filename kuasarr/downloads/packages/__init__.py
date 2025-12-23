@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Quasarr
-# Project by https://github.com/rix1337
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import json
 from collections import defaultdict
@@ -23,7 +23,7 @@ def get_links_comment(package, package_links):
     return None
 
 
-def get_links_status(package, all_links):
+def get_links_status(package, all_links, is_archive=False):
     links_in_package = []
     package_uuid = package.get("uuid")
     if package_uuid and all_links:
@@ -69,6 +69,11 @@ def get_links_status(package, all_links):
                 if eta and link_eta > eta or not eta:
                     eta = link_eta
             all_finished = False
+        elif is_archive:
+            link_status = link.get('status', '').lower()
+            if 'extraction ok' not in link_status and 'entpacken ok' not in link_status:
+                # Archiv als nicht fertig behandeln, solange Extraction nicht OK meldet
+                all_finished = False
 
     return {"all_finished": all_finished, "eta": eta, "error": error, "offline_mirror_linkids": offline_mirror_linkids}
 
@@ -233,12 +238,31 @@ def get_packages(shared_state):
     if downloader_packages and downloader_links:
         for package in downloader_packages:
             comment = get_links_comment(package, downloader_links)
-            link_details = get_links_status(package, downloader_links)
+
+            is_archive = False
+            try:
+                archive_info = shared_state.get_device().extraction.get_archive_info([], [package.get("uuid")])
+                is_archive = True if archive_info and archive_info[0] else False
+            except Exception:
+                # Fehler bei der Archiv-Erkennung ignorieren, damit finale Bytes/ETA-Logik greifen kann
+                pass
+
+            link_details = get_links_status(package, downloader_links, is_archive)
 
             error = link_details["error"]
             finished = link_details["all_finished"]
             if not finished and link_details["eta"]:
                 package["eta"] = link_details["eta"]
+
+            # Zusatz-Check: Download fertig, wenn Bytes voll und kein ETA
+            # Markiere nur als fertig, wenn sicher kein Archiv bzw. Archiv nicht erkannt
+            if not finished and not error:
+                bytes_total = int(package.get("bytesTotal", 0))
+                bytes_loaded = int(package.get("bytesLoaded", 0))
+                eta = package.get("eta")
+                if bytes_total > 0 and bytes_loaded >= bytes_total and eta is None:
+                    if not is_archive:
+                        finished = True
 
             # Post-Processing SOFORT wenn Download fertig ist (bevor Sonarr/Radarr reagiert)
             if finished and not error and comment and comment.startswith("kuasarr_"):
@@ -277,7 +301,7 @@ def get_packages(shared_state):
             time_left = "23:59:59"
             if package["type"] == "linkgrabber":
                 details = package["details"]
-                name = f"[Linkgrabber] {details["name"]}"
+                name = f"[Linkgrabber] {details['name']}"
                 try:
                     mb = mb_left = int(details["bytesTotal"]) / (1024 * 1024)
                 except KeyError:
@@ -306,12 +330,12 @@ def get_packages(shared_state):
                 if mb_left < 0:
                     mb_left = 0
 
-                if eta is None:
+                if mb_left == 0:
+                    status = "Extracting"
+                elif eta is None:
                     status = "Paused"
                 else:
                     time_left = format_eta(int(eta))
-                    if mb_left == 0:
-                        status = "Extracting"
 
                 name = f"[{status}] {details['name']}"
 
@@ -329,7 +353,7 @@ def get_packages(shared_state):
                 package_uuid = package["uuid"]
             else:
                 details = package["details"]
-                name = f"[CAPTCHA not solved!] {details["title"]}"
+                name = f"[CAPTCHA not solved!] {details['title']}"
                 mb = mb_left = details["size_mb"]
                 try:
                     package_id = package["package_id"]

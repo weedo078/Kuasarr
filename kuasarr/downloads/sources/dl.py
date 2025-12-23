@@ -103,7 +103,8 @@ def extract_links_from_post(post_html, host):
 def extract_password_from_post(post_content, host, title=""):
     """
     Extract password from post content.
-    Uses hardcoded passwords for known release groups, then falls back to pattern matching.
+    Uses hardcoded passwords for known release groups, then pattern matching,
+    with explicit "no password" detection before falling back to default.
     """
     # Hardcoded passwords for known release groups (check title)
     title_lower = title.lower() if title else ""
@@ -116,8 +117,7 @@ def extract_password_from_post(post_content, host, title=""):
         'the wooter': 'w00t',
         'the-wooter': 'w00t',
         # funxd (password is "funxd" - first part of hostname, like in fx.py)
-        'fun': 'funxd',
-        'FUN': 'funxd',
+        'FuN': 'funxd',
         'funxd': 'funxd',
     }
     
@@ -129,11 +129,24 @@ def extract_password_from_post(post_content, host, title=""):
     
     # Fallback: Try to extract from post content
     post_text = post_content.get_text() if hasattr(post_content, 'get_text') else str(post_content)
+    # Normalize whitespace to avoid false negatives
+    post_text = re.sub(r'\s+', ' ', post_text).strip()
+
+    # Upstream Strategy: Label + value, skip common non-password tokens
+    label_pattern = r'(?:passwort|password|pass|pw)[\s:]+([a-zA-Z0-9._-]{2,50})'
+    match = re.search(label_pattern, post_text, re.IGNORECASE)
+    if match:
+        candidate = match.group(1).strip()
+        skip_prefix = r'^(?:download|mirror|link|episode|info|mediainfo|spoiler|hier|click|klick|kein|none|no)'
+        if not re.match(skip_prefix, candidate, re.IGNORECASE):
+            debug(f"Password extracted from post (label strategy): '{candidate}'")
+            return candidate
     
     password_patterns = [
         r'(?:Passwort|Password|Pass|PW)\s*[:\.\-=]+\s*([^\s<\n\r]+)',
         r'(?:Passwort|Password|Pass|PW)\.+\s*[:\.\-=]*\s*([^\s<\n\r]+)',
         r'(?:Entpacken|Unpack|Extract)\s*[:\.\-=]+\s*([^\s<\n\r]+)',
+        r'\[code\]\s*([^\s\[\]]{3,50})\s*\[/code\]',  # common forum code tags
     ]
 
     for pattern in password_patterns:
@@ -143,6 +156,16 @@ def extract_password_from_post(post_content, host, title=""):
             if extracted_pw and len(extracted_pw) >= 3 and extracted_pw.lower() not in ['the', 'ist', 'und', 'for']:
                 debug(f"Password extracted from post: '{extracted_pw}'")
                 return extracted_pw
+
+    # Explicit "no password" indicators -> return empty string (do not force default)
+    no_password_patterns = [
+        r'(?:passwort|password|pass|pw)\s*[:\s-]*(?:kein(?:es)?|none|no|nicht|not|nein)',
+        r'(?:kein(?:es)?|none|no|nicht|not|nein)\s*(?:passwort|password|pass|pw)',
+    ]
+    for pattern in no_password_patterns:
+        if re.search(pattern, post_text, re.IGNORECASE):
+            debug("No password required (explicitly stated)")
+            return ""
     
     # Default password (forum hostname)
     default_pw = f"www.{host}"

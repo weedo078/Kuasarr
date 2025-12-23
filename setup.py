@@ -45,6 +45,7 @@ setuptools.setup(
             "static/*.js",
             "static/*.html",
             "static/*.webmanifest",
+            "version.json",
         ]
     },
     install_requires=required,

@@ -162,8 +162,9 @@ Get your DBC account at: [deathbycaptcha.com](https://deathbycaptcha.com?refid=1
 
 ## WebUI Authentication (Optional)
 
-Protect the Kuasarr WebUI with HTTP Basic Auth by setting environment variables:
+Protect the Kuasarr WebUI with HTTP Basic Auth via **ENV** or **kuasarr.ini**.
 
+**Option 1: Environment variables**
 ```bash
 docker run -d \
   --name kuasarr \
@@ -174,6 +175,13 @@ docker run -d \
   -e KUASARR_WEBUI_PASS=your_secure_password \
   -e TZ=Europe/Amsterdam \
   weedo078/kuasarr:latest
+```
+
+**Option 2: kuasarr.ini**
+```ini
+[WebUI]
+user = admin
+password = your_secure_password
 ```
 
 **Important:**

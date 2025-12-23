@@ -55,16 +55,33 @@ def setup_arr_routes(app):
 
         for upload in downloads:
             file_content = upload.file.read()
-            root = ElementTree.fromstring(file_content)
+            try:
+                root = ElementTree.fromstring(file_content)
+            except Exception as exc:
+                abort(400, f"Invalid NZB payload: cannot parse XML ({exc})")
 
-            title = sax_utils.unescape(root.find(".//file").attrib["title"])
+            # Support XML with namespaces by matching tag suffix
+            file_elem = root.find(".//file")
+            if file_elem is None:
+                for elem in root.iter():
+                    if elem.tag.lower().endswith("file"):
+                        file_elem = elem
+                        break
+            if file_elem is None:
+                abort(400, "Invalid NZB payload: missing <file> element")
 
-            url = root.find(".//file").attrib["url"]
-            mirror = None if (mirror := root.find(".//file").attrib.get("mirror")) == "None" else mirror
+            title = sax_utils.unescape(file_elem.attrib.get("title", ""))
+            url = file_elem.attrib.get("url")
+            size_mb = file_elem.attrib.get("size_mb")
 
-            size_mb = root.find(".//file").attrib["size_mb"]
-            password = root.find(".//file").attrib.get("password")
-            imdb_id = root.find(".//file").attrib.get("imdb_id")
+            if not title or not url or not size_mb:
+                abort(400, "Invalid NZB payload: missing required attributes")
+
+            mirror_attr = file_elem.attrib.get("mirror")
+            mirror = None if mirror_attr in (None, "None") else mirror_attr
+
+            password = file_elem.attrib.get("password")
+            imdb_id = file_elem.attrib.get("imdb_id")
 
             info(f'Attempting download for "{title}"')
             request_from = request.headers.get('User-Agent')

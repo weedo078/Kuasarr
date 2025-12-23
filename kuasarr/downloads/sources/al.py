@@ -516,7 +516,10 @@ def check_release(shared_state, details_html, release_id, title, episode_in_titl
     return title, release_id
 
 
-def extract_episode(title: str) -> int | None:
+from typing import Optional
+
+
+def extract_episode(title: str) -> Optional[int]:
     match = re.search(r'\bS\d{1,4}E(\d+)\b(?![\-E\d])', title)
     if match:
         return int(match.group(1))

@@ -1,5 +1,6 @@
-# Project by https://github.com/rix1337
-
+# -*- coding: utf-8 -*-
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 # Python
 *.pyc
 *.bak
@@ -11,33 +12,19 @@ __pycache__/
 
 # PyCharm
 .idea
-
+kuasarr/version.json
 # Kuasarr
 *.conf
 *.db
 *.ini
-
-# Handler
-neue_version*/
-*.old
-Quasarr/*
+__main__.py
 *.ps1
 *test.py
 *.env
 tests/
 
-# Captcha Helper
-captcha_helper/*
-captcha_helper/
-
-# Quasarr Original Code
-Quasarr/*
-Quasarr/
-
-.cursor
-#.windsurf
-.vscode
-
+.windsurf/
+.windsurf/workflows/
 config/
 ARCHITECTURE*.md
 
@@ -47,10 +34,10 @@ docker/*
 *docker*
 DOCKERHUB.md
 Dockerfile
-
+.dockerignore
 .build.txt
 
-
+helper/
 
 tmp-config/
 release/

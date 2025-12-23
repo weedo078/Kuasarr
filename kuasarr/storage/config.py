@@ -21,6 +21,10 @@ class Config(object):
         'API': [
             ("key", "secret", ""),
         ],
+        'WebUI': [
+            ("user", "secret", ""),
+            ("password", "secret", ""),
+        ],
         'JDownloader': [
             ("user", "secret", ""),
             ("password", "secret", ""),

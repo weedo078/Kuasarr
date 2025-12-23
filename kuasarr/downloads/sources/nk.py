@@ -11,6 +11,7 @@ from kuasarr.providers.log import info, debug
 from urllib.parse import urlparse, urljoin
 
 hostname = "nk"
+supported_mirrors = ["rapidgator", "ddownload"]
 
 
 def get_nk_download_links(shared_state, url, mirror, title):
@@ -28,13 +29,18 @@ def get_nk_download_links(shared_state, url, mirror, title):
         info(f"{hostname}: could not fetch release page for {title}: {e}")
         return False
 
-    # download links are provided as anchors with class 'dl-button'
+    # download links are provided as anchors with class 'btn-orange'
     anchors = soup.select('a.btn-orange')
     candidates = []
     for a in anchors:
+        mirror = a.text.strip().lower()
+        if mirror == 'ddl.to':
+            mirror = 'ddownload'
+
+        if mirror not in supported_mirrors:
+            continue
 
         href = a.get('href', '').strip()
-        hoster = href.split('/')[3].lower()
         if not href.lower().startswith(('http://', 'https://')):
             href = 'https://' + host + href
 
@@ -44,10 +50,7 @@ def get_nk_download_links(shared_state, url, mirror, title):
             info(f"{hostname}: could not resolve download link for {title}: {e}")
             continue
 
-        if hoster == 'ddl.to':
-            hoster = 'ddownload'
-
-        candidates.append([href, hoster])
+        candidates.append([href, mirror])
 
     if not candidates:
         info(f"No external download links found on {hostname} page for {title}")

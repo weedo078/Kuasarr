@@ -301,10 +301,16 @@ def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, s
     if hide_links:
         info(f"DL: Found {len(hide_links)} hide.cx link(s) - decrypting via API")
         hide_result = decrypt_links_if_hide(shared_state, hide_links)
-        if hide_result.get("status") == "success":
-            decrypted = hide_result.get("results", [])
+        status = hide_result.get("status")
+        decrypted = hide_result.get("results", [])
+        if status == "success" and decrypted:
             direct_links.extend(decrypted)
             info(f"DL: Decrypted {len(decrypted)} links from hide.cx")
+        elif status == "none":
+            debug("DL: hide.cx decrypt returned none/empty")
+        else:
+            info("DL: Failed to decrypt hide.cx links; leaving them protected (CAPTCHA queue)")
+            captcha_links.extend([l for l in hide_links if l not in captcha_links])
 
     # If we have direct hoster links (including decrypted hide.cx), send to JDownloader
     if direct_links:

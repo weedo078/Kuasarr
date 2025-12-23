@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Quasarr
-# Project by https://github.com/rix1337
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import re
 from urllib.parse import urljoin

@@ -40,13 +40,23 @@ __all__ = [
 
 def connect_to_jd(jd, user, password, device_name):
     """Connect to JDownloader and return True on success."""
-    try:
-        jd.connect(user, password)
-        jd.update_devices()
-        device = jd.get_device(device_name)
-    except (TokenExpiredException, RequestTimeoutException, MYJDException) as e:
-        info("Error connecting to JDownloader: " + str(e).strip())
-        return False
+    attempts = 0
+    while attempts < 3:
+        attempts += 1
+        try:
+            jd.connect(user, password)
+            jd.update_devices()
+            device = jd.get_device(device_name)
+        except (TokenExpiredException, RequestTimeoutException, MYJDException) as e:
+            msg = str(e).strip().lower()
+            info("Error connecting to JDownloader: " + str(e).strip())
+            # Simple maintenance/offline backoff
+            if "maintenance" in msg or "offline" in msg:
+                info("JDownloader API appears offline/maintenance - waiting 60s before retry")
+                time.sleep(60)
+                continue
+            return False
+        break
     if not device or not isinstance(device, (type, Jddevice)):
         return False
     else:

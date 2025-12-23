@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Quasarr
-# Project by https://github.com/rix1337
+# Kuasarr
+# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import json
 import re
@@ -63,7 +63,7 @@ def setup_captcha_routes(app):
                 desired_mirror = None
 
             # This is set for circle CAPTCHAs
-            session = data.get("session", None)
+            filecrypt_session = data.get("session", None)
 
             # This is required for cutcaptcha
             rapid = [ln for ln in links if "rapidgator" in ln[1].lower()]
@@ -78,15 +78,26 @@ def setup_captcha_routes(app):
                 "title": title,
                 "password": password,
                 "mirror": desired_mirror,
-                "session": session,
+                "session": filecrypt_session,
                 "links": prioritized_links,
                 "original_url": original_url
             }
 
             encoded_payload = urlsafe_b64encode(json.dumps(payload).encode()).decode()
 
-            if session:
-                debug(f'Session "{session}" found, redirecting to circle CAPTCHA')
+            # Junkies-Erkennung über Hostnames (sj/dj) aus Config
+            sj = shared_state.values["config"]("Hostnames").get("sj")
+            dj = shared_state.values["config"]("Hostnames").get("dj")
+            has_junkies_links = any(
+                (sj and sj in link) or (dj and dj in link)
+                for link in prioritized_links
+            )
+
+            if has_junkies_links:
+                debug("Redirecting to Junkies CAPTCHA")
+                redirect(f"/captcha/junkies?data={quote(encoded_payload)}")
+            elif filecrypt_session:
+                debug("Redirecting to circle CAPTCHA")
                 redirect(f"/captcha/circle?data={quote(encoded_payload)}")
             else:
                 debug(f"Redirecting to cutcaptcha")
@@ -105,6 +116,53 @@ def setup_captcha_routes(app):
             return json.loads(decoded)
         except Exception as e:
             return {"error": f"Failed to decode payload: {str(e)}"}
+
+    @app.get("/captcha/junkies")
+    def serve_junkies_captcha():
+        payload = decode_payload()
+
+        if "error" in payload:
+            return render_centered_html(f'''<h1><img src="{images.logo}" type="image/png" alt="Quasarr logo" class="logo"/>Quasarr</h1>
+            <p>{payload["error"]}</p>
+            <p>
+                {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
+            </p>''')
+
+        package_id = payload.get("package_id")
+        title = payload.get("title")
+        password = payload.get("password")
+        urls = payload.get("links") or []
+
+        if not urls:
+            return render_centered_html(f'''
+                <h1><img src="{images.logo}" type="image/png" alt="Quasarr logo" class="logo"/>Quasarr</h1>
+                <p style="max-width: 370px; word-wrap: break-word; overflow-wrap: break-word;"><b>Package:</b> {title}</p>
+                <p><b>Error:</b> No download links available for this package.</p>
+                <p>
+                    {render_button("Delete Package", "secondary", {"onclick": f"location.href='/captcha/delete/{package_id}'"})}
+                </p>
+                <p>
+                    {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
+                </p>
+            ''')
+
+        first_url = urls[0][0] if isinstance(urls[0], (list, tuple)) else urls[0]
+
+        return render_centered_html(f"""
+        <!DOCTYPE html>
+        <html>
+        <body>
+        <h1><img src="{images.logo}" type="image/png" alt="Quasarr logo" class="logo"/>Quasarr</h1>
+        <p><b>Package:</b> {title}</p>
+        {render_bypass_section(first_url, package_id, title, password)}
+        <p>
+            {render_button("Delete Package", "secondary", {{"onclick": f"location.href='/captcha/delete/{package_id}'"}})}
+        </p>
+        <p>
+            {render_button("Back", "secondary", {{"onclick": "location.href='/'"}})}
+        </p>
+        </body>
+        </html>""")
 
     @app.get('/captcha/kuasarr.user.js')
     def serve_kuasarr_user_js():
@@ -405,7 +463,7 @@ def setup_captcha_routes(app):
 
     @app.post('/captcha/<captcha_id>.html')
     def proxy_html(captcha_id):
-        target_url = f"{captcha_values()["url"]}/captcha/{captcha_id}.html"
+        target_url = f"{captcha_values()['url']}/captcha/{captcha_id}.html"
 
         headers = {key: value for key, value in request.headers.items() if key != 'Host'}
         data = request.body.read()
@@ -425,7 +483,7 @@ def setup_captcha_routes(app):
 
     @app.post('/captcha/<captcha_id>.json')
     def proxy_json(captcha_id):
-        target_url = f"{captcha_values()["url"]}/captcha/{captcha_id}.json"
+        target_url = f"{captcha_values()['url']}/captcha/{captcha_id}.json"
 
         headers = {key: value for key, value in request.headers.items() if key != 'Host'}
         data = request.body.read()
@@ -449,7 +507,7 @@ def setup_captcha_routes(app):
 
     @app.get('/captcha/<captcha_id>/<uuid>/<filename>')
     def proxy_pngs(captcha_id, uuid, filename):
-        new_url = f"{captcha_values()["url"]}/captcha/{captcha_id}/{uuid}/{filename}"
+        new_url = f"{captcha_values()['url']}/captcha/{captcha_id}/{uuid}/{filename}"
 
         try:
             external_response = requests.get(new_url, stream=True, verify=False)
@@ -464,7 +522,7 @@ def setup_captcha_routes(app):
 
     @app.post('/captcha/<captcha_id>/check')
     def proxy_check(captcha_id):
-        new_url = f"{captcha_values()["url"]}/captcha/{captcha_id}/check"
+        new_url = f"{captcha_values()['url']}/captcha/{captcha_id}/check"
         headers = {key: value for key, value in request.headers.items()}
 
         data = request.body.read()

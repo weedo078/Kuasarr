@@ -92,7 +92,10 @@ class CNL:
         return urls
 
 
-def decrypt_content(content_items: list[dict], mirror: str | None) -> list[str]:
+from typing import Optional
+
+
+def decrypt_content(content_items: list[dict], mirror: Optional[str]) -> list[str]:
     """
     Go through every item in `content_items`, but if `mirror` is not None,
     only attempt to decrypt those whose "hoster" field contains `mirror`.
