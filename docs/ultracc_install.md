@@ -11,7 +11,7 @@ References used:
 ## 1) Install Python with pyenv (no sudo)
 ```bash
 bash <(wget -qO- https://scripts.ultra.cc/util-v2/LanguageInstaller/Python-Installer/main.sh)
-# choose Python 3.9 or 3.11; wait for completion
+# choose Python 3.11; wait for completion
 source ~/.profile   # load pyenv shims
 python --version    # should point to ~/.pyenv/shims/python
 ```
@@ -19,11 +19,11 @@ python --version    # should point to ~/.pyenv/shims/python
 ## 2) Create venv and install wheel (from GitHub Releases)
 ```bash
 cd ~/apps/kuasarr
-python -m venv .venv-kuasarr-1.8.1
-source .venv-kuasarr-1.8.1/bin/activate
+python -m venv .venv-kuasarr
+source .venv-kuasarr/bin/activate
 pip install --upgrade pip
 # example: latest release wheel (adjust if needed)
-curl -L -o /tmp/kuasarr-latest.whl "https://github.com/weedo078/kuasarr/releases/latest/download/kuasarr-1.8.1-py3-none-any.whl"
+curl -L -o /tmp/kuasarr-latest.whl "https://github.com/weedo078/kuasarr/releases/latest/download/kuasarr-1.8.2-py3-none-any.whl"
 pip install /tmp/kuasarr-latest.whl
 ```
 
@@ -46,7 +46,7 @@ ip -4 addr show scope global | awk '/inet / {print $2}' | cut -d/ -f1
 # 172.1.0.1
 # ...
 ```
-Use a private IP (10.x / 172.16-31.x) for internal; avoid public addresses for internal callbacks.
+Use a private IP (10.x / 172.x) for internal; avoid public addresses for internal callbacks.
 
 ## 5) Systemd --user service
 Create `~/.config/systemd/user/kuasarr.service`:
@@ -57,7 +57,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/home/<user>/apps/kuasarr
-ExecStart=/home/<user>/apps/kuasarr/.venv-kuasarr-1.8.1/bin/python -m kuasarr --port 41960 --internal_address http://<chosen-ip>:41960
+ExecStart=/home/<user>/apps/kuasarr/.venv-kuasarr/bin/python -m kuasarr --port 41960 --internal_address http://<chosen-ip>:41960
 Restart=on-failure
 Environment=PYTHONUNBUFFERED=1
 
@@ -77,7 +77,12 @@ systemctl --user status kuasarr.service
 journalctl --user -u kuasarr.service -f
 ```
 
-If service should survive logout (host policy permitting):
+## Keep running after logout (host-dependent)
+If required and allowed:
 ```bash
-loginctl enable-linger <user>
+loginctl enable-linger <user-name>
 ```
+
+## Troubleshooting
+- **“No module named kuasarr” in the service**: Package missing in the service venv. Install with the venv pip (not pyenv global): `/home/<user>/apps/kuasarr/.venv-kuasarr/bin/python -m pip install ...`.
+- **Port already in use (OSError 98)**: Stop any manual instance (`pkill -f "python -m kuasarr"`) or choose a different port/address.

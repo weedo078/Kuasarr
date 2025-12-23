@@ -2,7 +2,7 @@
 description: How to update the Kuasarr Python app (systemd user service)
 ---
 
-# Kuasarr Update Guide (systemd --user)
+# Kuasarr Update Guide on Ultra.cc
 
 ## Prerequisites
 - Python venv at `~/apps/kuasarr/.venv-kuasarr`
@@ -20,16 +20,18 @@ description: How to update the Kuasarr Python app (systemd user service)
 3. **Download latest wheel from GitHub Releases** (example)
    ```bash
    # adjust version/tag/file as needed
-   curl -L -o /tmp/kuasarr-latest.whl "https://github.com/weedo078/kuasarr/releases/latest/download/kuasarr-1.8.1-py3-none-any.whl"
+   curl -L -o /tmp/kuasarr-latest.whl "https://github.com/weedo078/kuasarr/releases/latest/download/kuasarr-1.8.2-py311-none-any.whl"
    ```
 
 4. **Reinstall wheel** (in venv)
    ```bash
-   pip install --force-reinstall /tmp/kuasarr-latest.whl
+   # Use the venv pip, not pyenv global:
+   ~/.venv-kuasarr/bin/pip install --force-reinstall /tmp/kuasarr-latest.whl
    ```
 
 5. **Start service**
    ```bash
+   systemctl --user daemon-reload
    systemctl --user start kuasarr.service
    ```
 
@@ -46,8 +48,12 @@ systemctl --user daemon-reload
 systemctl --user restart kuasarr.service
 ```
 
+## Troubleshooting
+- **“No module named kuasarr” in the service**: Package missing in the service venv. Install with the venv pip, not pyenv-global.
+- **Port already in use (OSError 98)**: Stop any manual instance (`pkill -f "python -m kuasarr"`) or change port/address.
+
 ## Keep running after logout (host-dependent)
 If required and allowed:
 ```bash
-loginctl enable-linger coronary3409
+loginctl enable-linger <user-name>
 ```
