@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.9.0] - 2026-01-05
+
+### Added
+- **QuickTransfer Robustness**: Auto-redirect, single link support, and improved error handling for FileCrypt/KeepLinks.
+- **ToLink Support**: Full integration of ToLink into the DeathByCaptcha (DBC) workflow.
+- **Enhanced UI**: Dark Mode optimizations, new info boxes for "How This Works", and collapsible manual submission sections.
+- **New CSS Components**: Unified styling for boxes, buttons, and dividers across the CAPTCHA UI.
+- **Season/Episode Search**: Added season and episode numbers (e.g., S01E02) to search strings for HE and NK sources.
+
+### Improved
+- **DL Download Logic**: Paralleled status checking (ThreadPoolExecutor), automatic status URL generation (hide/tolink), and multi-post iteration for thread links.
+- **DL Search**: Sequential pagination with time-based limit (10s) and improved mirror recognition (image-based detection).
+- **Credential Handling**: JDownloader connection is now verified before credentials are saved.
+- **Session Management**: AL sessions now expire after 24h; optimized session validation for DL.
+- **Performance**: Webserver (WSGI) optimization to avoid slow host lookups during startup.
+
+### Changed
+- **Codebase Optimization**: Replaced legacy DL source files with optimized upstream versions, reducing code complexity by ~60%.
+- **Search Refactoring**: Sequential paginated search for DL to find best quality releases more efficiently.
+
+### Fixed
+- **Umlaut Handling**: Better support for German characters in searches.
+- **Log Management**: Reduced verbosity in search and download sources.
+
+---
+
 ## [1.8.3] - 2025-12-23
 
 ### Changed
