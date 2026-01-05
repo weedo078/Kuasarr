@@ -17,58 +17,58 @@ def setup_statistics(app, shared_state):
         <h1><img src="{images.logo}" type="image/png" alt="kuasarr logo" class="logo"/>kuasarr</h1>
         <h2>Statistics</h2>
         <div class="stats-container">
-            <h3>ðŸ“Š Overview</h3>
+            <h3>📊 Overview</h3>
             <div class="stats-grid compact">
                 <div class="stat-card highlight">
-                    <h3>ðŸ“¦ Total Download Attempts</h3>
+                    <h3>📦 Total Download Attempts</h3>
                     <div class="stat-value">{stats['total_download_attempts']}</div>
                     <div class="stat-subtitle">Success Rate: {stats['download_success_rate']:.1f}%</div>
                 </div>
                 <div class="stat-card highlight">
-                    <h3>ðŸ” Total CAPTCHA Decryptions</h3>
+                    <h3>🔑 Total CAPTCHA Decryptions</h3>
                     <div class="stat-value">{stats['total_captcha_decryptions']}</div>
                     <div class="stat-subtitle">Success Rate: {stats['decryption_success_rate']:.1f}%</div>
                 </div>
             </div>
 
-            <h3>ðŸ“¥ Downloads</h3>
+            <h3>📥 Downloads</h3>
             <div class="stats-grid compact">
                 <div class="stat-card">
-                    <h3>âœ… Packages Downloaded</h3>
+                    <h3>✅ Packages Downloaded</h3>
                     <div class="stat-value">{stats['packages_downloaded']}</div>
                 </div>
                 <div class="stat-card">
-                    <h3>âš™ï¸ Links Processed</h3>
+                    <h3>⚙️ Links Processed</h3>
                     <div class="stat-value">{stats['links_processed']}</div>
                 </div>
                 <div class="stat-card">
-                    <h3>âŒ Failed Downloads</h3>
+                    <h3>❌ Failed Downloads</h3>
                     <div class="stat-value">{stats['failed_downloads']}</div>
                 </div>
                 <div class="stat-card">
-                    <h3>ðŸ”— Average Links per Package</h3>
+                    <h3>🔗 Average Links per Package</h3>
                     <div class="stat-value">{stats['average_links_per_package']:.1f}</div>
                 </div>
             </div>
 
-            <h3>ðŸ§© CAPTCHAs</h3>
+            <h3>🧩 CAPTCHAs</h3>
             <div class="stats-grid compact">
                 <div class="stat-card">
-                    <h3>ðŸ¤– Automatic Decryptions</h3>
+                    <h3>🤖 Automatic Decryptions</h3>
                     <div class="stat-value">{stats['captcha_decryptions_automatic']}</div>
                     <div class="stat-subtitle">Success Rate: {stats['automatic_decryption_success_rate']:.1f}%</div>
                 </div>
                 <div class="stat-card">
-                    <h3>ðŸ‘¤ Manual Decryptions</h3>
+                    <h3>👤 Manual Decryptions</h3>
                     <div class="stat-value">{stats['captcha_decryptions_manual']}</div>
                     <div class="stat-subtitle">Success Rate: {stats['manual_decryption_success_rate']:.1f}%</div>
                 </div>
                 <div class="stat-card">
-                    <h3>â›” Failed Auto Decryptions</h3>
+                    <h3>⛔ Failed Auto Decryptions</h3>
                     <div class="stat-value">{stats['failed_decryptions_automatic']}</div>
                 </div>
                 <div class="stat-card">
-                    <h3>ðŸš« Failed Manual Decryptions</h3>
+                    <h3>🚫 Failed Manual Decryptions</h3>
                     <div class="stat-value">{stats['failed_decryptions_manual']}</div>
                 </div>
             </div>
