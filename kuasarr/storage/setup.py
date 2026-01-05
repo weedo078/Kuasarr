@@ -571,21 +571,15 @@ def jdownloader_config(shared_state):
         password = request.forms.get('pass')
         device = request.forms.get('device')
 
-        config = Config('JDownloader')
-
         if username and password and device:
-            config.save('user', username)
-            config.save('password', password)
-            config.save('device', device)
-
-            if not shared_state.set_device_from_config():
-                config.save('user', "")
-                config.save('password', "")
-                config.save('device', "")
-            else:
+            # Verify connection works before saving credentials
+            if shared_state.set_device(username, password, device):
+                config = Config('JDownloader')
+                config.save('user', username)
+                config.save('password', password)
+                config.save('device', device)
                 kuasarr.providers.web_server.temp_server_success = True
-                return render_success("Credentials set",
-                                      15)
+                return render_success("Credentials set", 15)
 
         return render_fail("Could not set credentials!")
 

@@ -58,6 +58,7 @@ def connect_to_jd(jd, user, password, device_name):
             return False
         break
     if not device or not isinstance(device, (type, Jddevice)):
+        info(f'Device "{device_name}" not found. Available devices may differ or be offline.')
         return False
     else:
         device.downloadcontroller.get_current_state()

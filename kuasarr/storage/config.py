@@ -166,9 +166,21 @@ class Config(object):
             cipher = AES.new(crypt_key, AES.MODE_CBC, crypt_iv)
             value = base64.b64encode(cipher.encrypt(pad(value.encode(), AES.block_size)))
             value = 'secret|' + value.decode()
-        self._config.set(section, key, value)
+        
+        # Lade Config neu vor dem Schreiben um Race-Conditions zu vermeiden
+        fresh_config = configparser.RawConfigParser()
+        if os.path.exists(self._configfile):
+            fresh_config.read(self._configfile)
+        
+        if not fresh_config.has_section(section):
+            fresh_config.add_section(section)
+        
+        fresh_config.set(section, key, value)
         with open(self._configfile, 'w') as configfile:
-            self._config.write(configfile)
+            fresh_config.write(configfile)
+        
+        # Aktualisiere interne Config
+        self._config = fresh_config
 
     def _read_config(self, section):
         return [(key, '', self._config.get(section, key)) for key in self._config.options(section)]

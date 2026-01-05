@@ -6,7 +6,8 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     python3-dev \
-    build-base
+    build-base \
+    zlib-dev
 
 # allow pip to manage the system installation (PEP 668)
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
@@ -47,7 +48,7 @@ source.write_text(source.read_text().replace('1.3.0', '1.3.0'))
 PY
 
 # cleanup build deps to keep image slim
-RUN apk del build-base python3-dev || true
+RUN apk del build-base python3-dev zlib-dev || true
 
 # runtime defaults
 VOLUME /config

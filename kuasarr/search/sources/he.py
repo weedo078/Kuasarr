@@ -24,7 +24,13 @@ def he_search(shared_state, start_time, request_from, imdb_id, mirror=None, seas
         'User-Agent': shared_state.values["user_agent"],
     }
 
-    search_url = f"https://{host}/?s={imdb_id}"
+    source_search = imdb_id
+    if season:
+        source_search += f" S{int(season):02d}"
+    if episode:
+        source_search += f"E{int(episode):02d}"
+
+    search_url = f"https://{host}/?s={source_search}"
 
     try:
         resp = requests.get(search_url, headers=headers, timeout=30)

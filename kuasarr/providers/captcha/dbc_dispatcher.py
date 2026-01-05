@@ -330,6 +330,8 @@ class DBCDispatcher:
             return self._solve_filecrypt_with_dbc(title, link_url, password, mirror)
         elif "keeplinks" in link_url.lower() or "keeplinks" in mirror.lower():
             return self._solve_keeplinks_with_dbc(title, link_url, password, mirror)
+        elif "tolink" in link_url.lower() or "tolink" in mirror.lower():
+            return self._solve_tolink_with_dbc(title, link_url, password, mirror)
         else:
             # For other link types, try generic approach
             return self._solve_generic_link(title, link_url, password)
@@ -966,6 +968,203 @@ class DBCDispatcher:
                     if href not in links:
                         links.append(href)
                         debug(f"Keeplinks: Found download link (fallback): {href[:60]}...")
+        
+        return links
+
+    def _solve_tolink_with_dbc(
+        self,
+        title: str,
+        url: str,
+        password: str,
+        mirror: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Solve ToLink using DBC for image captcha solving.
+        
+        ToLink uses a simple image captcha similar to Keeplinks.
+        
+        Flow:
+        1. GET the page
+        2. Find and solve CAPTCHA image via DBC
+        3. POST CAPTCHA solution
+        4. Extract download links
+        """
+        info(f"Attempting to decrypt ToLink: {url}")
+        
+        session = requests.Session()
+        headers = {
+            'User-Agent': self.shared_state.values["user_agent"],
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': url,
+        }
+        
+        try:
+            # Step 1: Initial GET request
+            debug(f"ToLink: Initial GET request")
+            response = session.get(url, headers=headers, timeout=30)
+            
+            if response.status_code != 200:
+                info(f"ToLink: Initial request failed with status {response.status_code}")
+                return None
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Step 2: Check for download links first (might be visible without captcha)
+            links = self._extract_tolink_download_links(soup)
+            if links:
+                info(f"ToLink: Found {len(links)} links (no CAPTCHA solving needed)")
+                return {"status": "success", "links": links}
+            
+            # Step 3: Find and solve CAPTCHA
+            captcha_img = soup.find('img', src=re.compile(r'captcha', re.IGNORECASE))
+            if not captcha_img:
+                # Try alternative captcha image patterns
+                captcha_img = soup.find('img', {'id': re.compile(r'captcha', re.IGNORECASE)})
+            if not captcha_img:
+                captcha_img = soup.find('img', {'class': re.compile(r'captcha', re.IGNORECASE)})
+            
+            if not captcha_img:
+                info("ToLink: No CAPTCHA image found and no links available")
+                return None
+            
+            captcha_url = captcha_img.get('src', '')
+            if not captcha_url.startswith('http'):
+                # Build absolute URL
+                from urllib.parse import urljoin
+                captcha_url = urljoin(url, captcha_url)
+            
+            debug(f"ToLink: CAPTCHA image URL: {captcha_url}")
+            
+            # Download CAPTCHA image
+            captcha_response = session.get(captcha_url, headers=headers, timeout=30)
+            if captcha_response.status_code != 200:
+                info(f"ToLink: Failed to download CAPTCHA image")
+                return None
+            
+            # Step 4: Solve CAPTCHA via DBC
+            if not self._client:
+                info("ToLink: DBC client not initialized")
+                return None
+            
+            debug(f"ToLink: Solving image CAPTCHA ({len(captcha_response.content)} bytes)")
+            captcha_result = self._client.solve_captcha(captcha_response.content)
+            
+            if not captcha_result or not captcha_result.text:
+                info("ToLink: DBC failed to solve CAPTCHA")
+                return None
+            
+            captcha_token = captcha_result.text
+            info(f"ToLink: CAPTCHA solved: {captcha_token}")
+            
+            # Step 5: Find form and submit CAPTCHA solution
+            captcha_form = soup.find('form')
+            if not captcha_form:
+                info("ToLink: Could not find form")
+                return None
+            
+            # Build POST data
+            post_data = {}
+            for input_elem in captcha_form.find_all('input'):
+                name = input_elem.get('name')
+                value = input_elem.get('value', '')
+                if name:
+                    # Common captcha field names
+                    if name.lower() in ['captcha', 'captcha_code', 'code', 'security_code']:
+                        post_data[name] = captcha_token
+                    else:
+                        post_data[name] = value
+            
+            # If no captcha field found, try common names
+            if not any(k.lower() in ['captcha', 'captcha_code', 'code', 'security_code'] for k in post_data.keys()):
+                post_data['captcha'] = captcha_token
+            
+            debug(f"ToLink: Submitting CAPTCHA solution")
+            form_action = captcha_form.get('action', '')
+            if form_action and not form_action.startswith('http'):
+                from urllib.parse import urljoin
+                form_action = urljoin(url, form_action)
+            submit_url = form_action if form_action else url
+            
+            response = session.post(submit_url, data=post_data, headers=headers, timeout=30)
+            
+            if response.status_code != 200:
+                info(f"ToLink: CAPTCHA POST failed with status {response.status_code}")
+                return None
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Check for error messages
+            error_msg = soup.find(text=re.compile(r'wrong|invalid|incorrect|error', re.IGNORECASE))
+            if error_msg and 'captcha' in str(error_msg).lower():
+                info(f"ToLink: CAPTCHA was rejected")
+                return None
+            
+            # Step 6: Extract download links
+            links = self._extract_tolink_download_links(soup)
+            
+            if not links:
+                info("ToLink: No download links found after CAPTCHA submission")
+                return None
+            
+            # Filter by mirror if specified
+            if mirror:
+                mirror_lower = mirror.lower()
+                filtered_links = [link for link in links if mirror_lower in link.lower()]
+                if filtered_links:
+                    links = filtered_links
+            
+            info(f"ToLink: Successfully extracted {len(links)} download links")
+            return {"status": "success", "links": links}
+            
+        except requests.RequestException as e:
+            info(f"ToLink: Request error - {e}")
+            return None
+        except Exception as e:
+            info(f"ToLink: Unexpected error - {e}")
+            return None
+
+    def _extract_tolink_download_links(self, soup: BeautifulSoup) -> list:
+        """Extract download links from a ToLink page.
+        
+        Similar to Keeplinks extraction but adapted for ToLink's structure.
+        """
+        links = []
+        
+        # Patterns for valid download links
+        hoster_patterns = [
+            r'rapidgator\.net/file/',
+            r'rg\.to/file/',
+            r'ddownload\.com/[a-z0-9]+/',
+            r'uploaded\.net/file/',
+            r'uploaded\.to/file/',
+            r'ul\.to/[a-z0-9]+',
+            r'nitroflare\.com/view/',
+            r'turbobit\.net/[a-z0-9]+/',
+            r'1fichier\.com/\?[a-z0-9]+',
+            r'katfile\.com/[a-z0-9]+/',
+            r'mexashare\.com/[a-z0-9]+/',
+            r'depositfiles\.com/files/',
+            r'filefactory\.com/file/',
+        ]
+        
+        combined_pattern = '|'.join(hoster_patterns)
+        
+        # Look for all links matching hoster patterns
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '').strip()
+            
+            # Skip links with images (ads/banners)
+            if link.find('img'):
+                continue
+            
+            # Skip affiliate/free links
+            if '/free' in href.lower() or 'affiliate' in href.lower():
+                continue
+            
+            if re.search(combined_pattern, href, re.IGNORECASE):
+                if href not in links:
+                    links.append(href)
+                    debug(f"ToLink: Found download link: {href[:60]}...")
         
         return links
 

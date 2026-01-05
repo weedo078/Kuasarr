@@ -5,6 +5,7 @@
 import base64
 import json
 import pickle
+import time
 import urllib.parse
 
 import requests
@@ -14,6 +15,9 @@ from requests.exceptions import Timeout, RequestException
 from kuasarr.providers.log import info, debug
 
 hostname = "al"
+
+# Session expires after 24 hours
+SESSION_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 def create_and_persist_session(shared_state):
@@ -98,15 +102,44 @@ def create_and_persist_session(shared_state):
         info(f'Missing credentials for: "{hostname}" - skipping login')
         return None
 
-    blob = pickle.dumps(sess)
-    token = base64.b64encode(blob).decode("utf-8")
-    shared_state.values["database"]("sessions").update_store(hostname, token)
+    # Use the helper function to persist with timestamp
+    _persist_session_to_db(shared_state, sess)
     return sess
 
 
 def retrieve_and_validate_session(shared_state):
+    """
+    Retrieve and validate session from database.
+    Supports new JSON format with expiry tracking and legacy plain token format.
+    Sessions expire after SESSION_MAX_AGE_SECONDS (24 hours).
+    """
     db = shared_state.values["database"]("sessions")
-    token = db.retrieve(hostname)
+    stored = db.retrieve(hostname)
+    if not stored:
+        return create_and_persist_session(shared_state)
+
+    token = None
+    created_at = None
+    
+    # Try to parse as new JSON format with timestamp
+    try:
+        session_data = json.loads(stored)
+        token = session_data.get("token")
+        created_at = session_data.get("created_at", 0)
+        
+        # Check if session has expired
+        age = time.time() - created_at
+        if age > SESSION_MAX_AGE_SECONDS:
+            debug(f"{hostname}: Session expired (age: {age/3600:.1f}h > {SESSION_MAX_AGE_SECONDS/3600:.0f}h), recreating...")
+            return create_and_persist_session(shared_state)
+        else:
+            debug(f"{hostname}: Session valid (age: {age/3600:.1f}h)")
+            
+    except (json.JSONDecodeError, TypeError):
+        # Legacy format: plain base64 token without timestamp
+        debug(f"{hostname}: Legacy session format detected, treating as expired and recreating...")
+        return create_and_persist_session(shared_state)
+
     if not token:
         return create_and_persist_session(shared_state)
 
@@ -131,10 +164,16 @@ def invalidate_session(shared_state):
 def _persist_session_to_db(shared_state, sess):
     """
     Serialize & store the given requests.Session into the database under `hostname`.
+    Stores as JSON with token and created_at timestamp for session expiry tracking.
     """
     blob = pickle.dumps(sess)
     token = base64.b64encode(blob).decode("utf-8")
-    shared_state.values["database"]("sessions").update_store(hostname, token)
+    # Store as JSON with timestamp for expiry tracking
+    session_data = json.dumps({
+        "token": token,
+        "created_at": time.time()
+    })
+    shared_state.values["database"]("sessions").update_store(hostname, session_data)
 
 
 def _load_session_cookies_for_flaresolverr(sess):

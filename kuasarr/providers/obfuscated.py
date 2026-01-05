@@ -21,6 +21,7 @@ def filecrypt_quasarr_helper_user_js():
 // @match        *://filecrypt.cc/*
 // @match        *://filecrypt.co/*
 // @grant        none
+// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
 // ==/UserScript==
 
 (function() {
@@ -76,10 +77,176 @@ def filecrypt_quasarr_helper_user_js():
 
     // Try to find links after page load
     if (document.readyState === 'complete') {
-        findAndTransferLinks();
+        setTimeout(findAndTransferLinks, 1500);
     } else {
         window.addEventListener('load', () => {
-            setTimeout(findAndTransferLinks, 1000);
+            setTimeout(findAndTransferLinks, 1500);
+        });
+    }
+})();
+'''
+
+
+def keeplinks_quasarr_helper_user_js():
+    return r'''// ==UserScript==
+// @name         Kuasarr KeepLinks Helper
+// @namespace    https://github.com/weedo078/kuasarr
+// @version      1.0
+// @description  Automatically transfers download links from KeepLinks to Kuasarr
+// @match        *://keeplinks.org/*
+// @match        *://keeplinks.eu/*
+// @match        *://www.keeplinks.org/*
+// @match        *://www.keeplinks.eu/*
+// @grant        none
+// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Check if we have transfer parameters in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const transferUrl = urlParams.get('transfer_url');
+    const pkgId = urlParams.get('pkg_id');
+
+    if (!transferUrl || !pkgId) {
+        return; // Not a Kuasarr transfer request
+    }
+
+    // Wait for page to load and find download links
+    function findAndTransferLinks() {
+        const links = [];
+        
+        // Find all download links on the page (KeepLinks specific selectors)
+        document.querySelectorAll('a.selecttext, a[href*="rapidgator"], a[href*="ddownload"], a[href*="uploaded"], a[href*="turbobit"], a[href*="nitroflare"], a[href*="1fichier"]').forEach(a => {
+            const href = a.href;
+            if (href && !href.includes('keeplinks') && (
+                href.includes('rapidgator') ||
+                href.includes('ddownload') ||
+                href.includes('uploaded') ||
+                href.includes('turbobit') ||
+                href.includes('nitroflare') ||
+                href.includes('1fichier') ||
+                href.includes('katfile') ||
+                href.includes('mexashare')
+            )) {
+                // Strip protocol to save space
+                let cleanLink = href.replace(/^https?:\/\//, '');
+                if (!links.includes(cleanLink)) {
+                    links.push(cleanLink);
+                }
+            }
+        });
+
+        if (links.length === 0) {
+            console.log('Kuasarr: No download links found yet');
+            return false;
+        }
+
+        console.log('Kuasarr: Found ' + links.length + ' download links');
+
+        // Compress and encode links
+        const linksText = links.join('\n');
+        const compressed = pako.deflateRaw(linksText, { to: 'string' });
+        const encoded = btoa(String.fromCharCode.apply(null, compressed))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        // Redirect to Kuasarr with the links
+        const redirectUrl = `${transferUrl}?pkg_id=${encodeURIComponent(pkgId)}&links=${encoded}`;
+        window.location.href = redirectUrl;
+        return true;
+    }
+
+    // Try to find links after page load
+    if (document.readyState === 'complete') {
+        setTimeout(findAndTransferLinks, 1500);
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(findAndTransferLinks, 1500);
+        });
+    }
+})();
+'''
+
+
+def tolink_quasarr_helper_user_js():
+    return r'''// ==UserScript==
+// @name         Kuasarr ToLink Helper
+// @namespace    https://github.com/weedo078/kuasarr
+// @version      1.0
+// @description  Automatically transfers download links from ToLink to Kuasarr
+// @match        *://tolink.*/*
+// @match        *://*.tolink.*/*
+// @grant        none
+// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Check if we have transfer parameters in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const transferUrl = urlParams.get('transfer_url');
+    const pkgId = urlParams.get('pkg_id');
+
+    if (!transferUrl || !pkgId) {
+        return; // Not a Kuasarr transfer request
+    }
+
+    // Wait for page to load and find download links
+    function findAndTransferLinks() {
+        const links = [];
+        
+        // Find all download links on the page
+        document.querySelectorAll('a[href]').forEach(a => {
+            const href = a.href;
+            if (href && !href.includes('tolink') && (
+                href.includes('rapidgator') ||
+                href.includes('ddownload') ||
+                href.includes('uploaded') ||
+                href.includes('turbobit') ||
+                href.includes('nitroflare') ||
+                href.includes('1fichier') ||
+                href.includes('katfile') ||
+                href.includes('mexashare')
+            )) {
+                // Strip protocol to save space
+                let cleanLink = href.replace(/^https?:\/\//, '');
+                if (!links.includes(cleanLink)) {
+                    links.push(cleanLink);
+                }
+            }
+        });
+
+        if (links.length === 0) {
+            console.log('Kuasarr: No download links found yet');
+            return false;
+        }
+
+        console.log('Kuasarr: Found ' + links.length + ' download links');
+
+        // Compress and encode links
+        const linksText = links.join('\n');
+        const compressed = pako.deflateRaw(linksText, { to: 'string' });
+        const encoded = btoa(String.fromCharCode.apply(null, compressed))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        // Redirect to Kuasarr with the links
+        const redirectUrl = `${transferUrl}?pkg_id=${encodeURIComponent(pkgId)}&links=${encoded}`;
+        window.location.href = redirectUrl;
+        return true;
+    }
+
+    // Try to find links after page load
+    if (document.readyState === 'complete') {
+        setTimeout(findAndTransferLinks, 1500);
+    } else {
+        window.addEventListener('load', () => {
+            setTimeout(findAndTransferLinks, 1500);
         });
     }
 })();

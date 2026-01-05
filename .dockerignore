@@ -1,13 +1,14 @@
 ﻿# Virtual environments
 kuasarr_venv/
-venv/
+*venv*/
 env/
 .env
 *.env
-
-
+kuasarr.egg.info/
+__main__.py
+kuasarr/version.json
 # Python cache
-__pycache__/
+__pycache__/py
 *.pyc
 *.pyo
 *.pyd
@@ -54,6 +55,9 @@ debug_*.py
 # Git
 .git/
 .gitignore
+.github/
+*.spec
+helper/
 
 # Documentation
 *.md
@@ -69,8 +73,7 @@ docker/
 Dockerfile
 !Dockerfile.local
 
-# Captcha Helper (nicht auf DockerHub pushen)
-captcha_helper/
+
 config/
 docker/
 Quasarr/

@@ -9,7 +9,8 @@ __pycache__/
 
 # Build Tools
 *venv*/
-
+docs/
+docs/*
 # PyCharm
 .idea
 kuasarr/version.json
@@ -22,9 +23,12 @@ __main__.py
 *test.py
 *.env
 tests/
-
+.windsurf/plans/
+.windsurf/plans/*
 .windsurf/
+.windsurf/*
 .windsurf/workflows/
+.windsurf/workflows/*
 config/
 ARCHITECTURE*.md
 
