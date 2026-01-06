@@ -39,7 +39,7 @@ All configuration, Hostnames, Flaresolverr, etc. lives inside `/config/kuasarr.i
 
 ## Improvements
 
-- **DeathByCaptcha Integration**: Automatic captcha solving via [DeathByCaptcha](https://deathbycaptcha.com?refid=1237432788a). Configure credentials in `kuasarr.ini` or via environment variables.
+- **Captcha Integration**: Automatic captcha solving via [DeathByCaptcha](https://deathbycaptcha.com?refid=1237432788a) or [2Captcha](https://2captcha.com/?from=26376359). 2Captcha is up to 50% cheaper for certain captcha types (e.g. CutCaptcha).
 - **Hoster Filtering**: Exclude unwanted mirrors directly via the UI.
 - **Multi-arch Docker images**: Official images now published for `linux/amd64`, `linux/arm64`, and `linux/arm/v7` (from v1.8.1).
 
@@ -124,19 +124,30 @@ Set up Kuasarr as a **Newznab Indexer** and **SABnzbd Download Client**:
 1. Under `Folders` add the full Kuasarr download path, typically `/downloads/Kuasarr/`
 2. If you do not do this,  processing after the download will fail.
 
-## DeathByCaptcha Configuration
+## Captcha Configuration
 
-Add your DBC credentials to `kuasarr.ini`:
+Kuasarr supports multiple captcha solving services. Add your credentials to `kuasarr.ini`:
 
 ```ini
-[DeathByCaptcha]
+[Captcha]
+# Choose your service: "dbc" or "2captcha"
+service = dbc
+
+# --- DeathByCaptcha settings ---
 # Option 1: Username/Password
-username = your_username
-password = your_password
+dbc_username = your_username
+dbc_password = your_password
 
-# Option 2: Auth Token (recomended)
-authtoken = your_auth_token
+# Option 2: Auth Token (recommended)
+dbc_authtoken = your_auth_token
 
+# --- 2Captcha settings ---
+twocaptcha_api_key = your_2captcha_api_key
+
+# --- Advanced settings (optional) ---
+timeout = 120
+max_retries = 3
+retry_backoff = 5
 ```
 
 Or use environment variables:
@@ -148,7 +159,7 @@ docker run -d \
   -v /path/to/config/:/config \
   -e INTERNAL_ADDRESS=http://192.168.0.1:8080 \
   -e DBC_AUTHTOKEN=your_authtoken \
-  -e DBC_PASSWORD=your_password \
+  -e TWOCAPTCHA_API_KEY=your_2captcha_key \
   -e TZ=Europe/Amsterdam \
   weedo078/kuasarr:latest
 ```
@@ -156,9 +167,15 @@ docker run -d \
 Available environment variables:
 - `DBC_USERNAME` - DeathByCaptcha username
 - `DBC_PASSWORD` - DeathByCaptcha password
-- `DBC_AUTHTOKEN` - Alternative: Auth token (instead of username/password)
+- `DBC_AUTHTOKEN` - DeathByCaptcha Auth token
+- `TWOCAPTCHA_API_KEY` - 2Captcha API Key
+- `CAPTCHA_TIMEOUT` - Timeout in seconds (default: 120)
+- `CAPTCHA_MAX_RETRIES` - Max retries (default: 3)
+- `CAPTCHA_RETRY_BACKOFF` - Seconds between retries (default: 5)
 
-Get your DBC account at: [deathbycaptcha.com](https://deathbycaptcha.com?refid=1237432788a)
+Links:
+- [deathbycaptcha.com](https://deathbycaptcha.com?refid=1237432788a)
+- [2captcha.com](https://2captcha.com?from=12345)
 
 ## WebUI Authentication (Optional)
 

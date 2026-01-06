@@ -61,7 +61,11 @@ def run():
 
         print("\n===== Recommended Services =====")
         print('For convenient universal premium downloads use: "http://real-debrid.com/?id=13910652"')
-        print('Automated CAPTCHA solutions are available via the DBC Integration. Simply provide DBC-API-Key in kuasarr.ini. Get yours here: https://deathbycaptcha.com?refid=1237432788a ')
+        
+        if captcha_service == '2captcha':
+            print('Automated CAPTCHA solutions via 2Captcha (50% cheaper). Get yours here: https://2captcha.com/?from=26376359')
+        else:
+            print('Automated CAPTCHA solutions via DBC. Get yours here: https://deathbycaptcha.com?refid=1237432788a')
 
         print("\n===== Startup Info =====")
         port = int('9999')

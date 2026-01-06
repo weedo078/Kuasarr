@@ -57,6 +57,11 @@ def dl_feed(shared_state, start_time, request_from, mirror=None):
     """
     releases = []
     host = shared_state.values["config"]("Hostnames").get(hostname)
+    if not host:
+        debug(f"{hostname}: hostname not configured")
+        return releases
+
+    clean_host = host.replace("www.", "")
 
     if "lazylibrarian" in request_from.lower():
         forum = "magazine-zeitschriften.72"
@@ -65,17 +70,13 @@ def dl_feed(shared_state, start_time, request_from, mirror=None):
     else:
         forum = "hd.14"
 
-    if not host:
-        debug(f"{hostname}: hostname not configured")
-        return releases
-
     try:
         sess = retrieve_and_validate_session(shared_state)
         if not sess:
             info(f"Could not retrieve valid session for {host}")
             return releases
 
-        forum_url = f'https://www.{host}/forums/{forum}/?order=post_date&direction=desc'
+        forum_url = f'https://www.{clean_host}/forums/{forum}/?order=post_date&direction=desc'
         response = sess.get(forum_url, timeout=30)
 
         if response.status_code != 200:
@@ -112,7 +113,7 @@ def dl_feed(shared_state, start_time, request_from, mirror=None):
 
                 # Make sure URL is absolute
                 if thread_url.startswith('/'):
-                    thread_url = f"https://www.{host}{thread_url}"
+                    thread_url = f"https://www.{clean_host}{thread_url}"
 
                 # Extract date and convert to RFC 2822 format
                 date_elem = item.select_one('time.u-dt')
@@ -172,14 +173,18 @@ def _replace_umlauts(text):
     return text
 
 
-def _search_single_page(shared_state, host, search_string, search_id, page_num, imdb_id, mirror, request_from, season,
+def _search_single_page(shared_state, host, query_string, search_id, page_num, imdb_id, mirror, request_from, season,
                         episode):
     """
     Search a single page. This function is called in parallel for each page.
     """
     page_releases = []
 
-    search_string = _replace_umlauts(search_string)
+    # XenForo Suche funktioniert oft besser mit originalen Umlauten
+    search_string = query_string
+
+    # Sicherstellen, dass host kein www. doppelt hat
+    clean_host = host.replace("www.", "")
 
     try:
         if page_num == 1:
@@ -187,7 +192,7 @@ def _search_single_page(shared_state, host, search_string, search_id, page_num, 
                 'keywords': search_string,
                 'c[title_only]': 1
             }
-            search_url = f'https://www.{host}/search/search'
+            search_url = f'https://www.{clean_host}/search/search'
         else:
             if not search_id:
                 return page_releases, None
@@ -197,7 +202,7 @@ def _search_single_page(shared_state, host, search_string, search_id, page_num, 
                 'q': search_string,
                 'o': 'relevance'
             }
-            search_url = f'https://www.{host}/search/{search_id}/'
+            search_url = f'https://www.{clean_host}/search/{search_id}/'
 
         search_response = fetch_via_requests_session(shared_state, method="GET",
                                                      target_url=search_url,
@@ -220,6 +225,12 @@ def _search_single_page(shared_state, host, search_string, search_id, page_num, 
         result_items = soup.select('li.block-row')
 
         if not result_items:
+            # Manchmal sind Suchergebnisse auch in structItem-container (XF2)
+            result_items = soup.select('div.structItem')
+            if result_items:
+                debug(f"{hostname}: [Page {page_num}] found {len(result_items)} results via div.structItem")
+
+        if not result_items:
             debug(f"{hostname}: [Page {page_num}] found 0 results")
             return page_releases, extracted_search_id
 
@@ -227,7 +238,8 @@ def _search_single_page(shared_state, host, search_string, search_id, page_num, 
 
         for item in result_items:
             try:
-                title_elem = item.select_one('h3.contentRow-title a')
+                # Verschiedene Selektoren probieren
+                title_elem = item.select_one('h3.contentRow-title a') or item.select_one('div.structItem-title a')
                 if not title_elem:
                     continue
 
@@ -239,17 +251,23 @@ def _search_single_page(shared_state, host, search_string, search_id, page_num, 
                 # Filter: Skip if no resolution or codec info (unless LazyLibrarian)
                 if 'lazylibrarian' not in request_from.lower():
                     if not (RESOLUTION_REGEX.search(title_normalized) or CODEC_REGEX.search(title_normalized)):
-                        continue
+                        # Wir loggen es nur als Debug, skippen aber nicht mehr so hart
+                        debug(f"{hostname}: '{title_normalized}' missing resolution/codec info, but continuing...")
+                        pass 
 
                 # Filter: Skip XXX content unless explicitly searched for
-                if XXX_REGEX.search(title_normalized) and 'xxx' not in search_string.lower():
+                if XXX_REGEX.search(title_normalized) and 'xxx' not in query_string.lower():
+                    debug(f"{hostname}: Skipping '{title_normalized}' - XXX content")
                     continue
 
                 thread_url = title_elem.get('href')
                 if thread_url.startswith('/'):
-                    thread_url = f"https://www.{host}{thread_url}"
+                    thread_url = f"https://www.{clean_host}{thread_url}"
 
-                if not shared_state.is_valid_release(title_normalized, request_from, search_string, season, episode):
+                # Nutze IMDb ID für Validierung wenn vorhanden
+                v_search = imdb_id if imdb_id else query_string
+                if not shared_state.is_valid_release(title_normalized, request_from, v_search, season, episode):
+                    debug(f"{hostname}: Skipping '{title_normalized}' - failed is_valid_release check (Search: {v_search})")
                     continue
 
                 # Extract date and convert to RFC 2822 format
@@ -298,19 +316,33 @@ def dl_search(shared_state, start_time, request_from, search_string,
     releases = []
     host = shared_state.values["config"]("Hostnames").get(hostname)
 
+    query_string = search_string
     imdb_id = shared_state.is_imdb_id(search_string)
+    
+    # Intelligente Titel-Extraktion für IMDb-Suchen
+    main_title = ""
     if imdb_id:
-        title = get_localized_title(shared_state, imdb_id, 'de')
-        if not title:
+        full_title = get_localized_title(shared_state, imdb_id, 'de')
+        if not full_title:
             info(f"{hostname}: no title for IMDb {imdb_id}")
             return releases
-        search_string = title
+        
+        # Speichere den vollen Titel für die Suche
+        query_string = full_title
+        
+        # Extrahiere Haupttitel (vor Doppelpunkt oder Bindestrich)
+        # z.B. "Shameless - Nicht ganz nüchtern" -> "Shameless"
+        main_title = re.split(r'[:\-]', full_title)[0].strip()
+        if main_title == full_title:
+            main_title = "" # Kein Unterschied, also kein Fallback nötig
 
-    search_string = unescape(search_string)
-    max_search_duration = 7
+    query_string = unescape(query_string)
+    max_search_duration = 10 
 
-    debug(
-        f"{hostname}: Starting sequential paginated search for '{search_string}' (Season: {season}, Episode: {episode}) - max {max_search_duration}s")
+    # Liste der Suchbegriffe (zuerst der genaueste)
+    search_variants = [query_string]
+    if main_title:
+        search_variants.append(main_title)
 
     try:
         sess = retrieve_and_validate_session(shared_state)
@@ -319,32 +351,46 @@ def dl_search(shared_state, start_time, request_from, search_string,
             return releases
 
         search_id = None
-        page_num = 0
         search_start_time = time.time()
+        
+        for variant in search_variants:
+            # Wenn wir schon Ergebnisse haben, brauchen wir den Fallback nicht mehr
+            if releases and (time.time() - search_start_time) > 5:
+                break
+                
+            # Füge Staffel/Episode zu den Suchbegriffen hinzu (verbessert Trefferquote enorm)
+            search_keywords = variant
+            if season:
+                search_keywords += f" S{int(season):02d}"
+            if episode:
+                search_keywords += f" E{int(episode):02d}"
 
-        # Sequential search through pages until timeout or no results
-        while (time.time() - search_start_time) < max_search_duration:
-            page_num += 1
+            debug(f"{hostname}: Searching for '{search_keywords}' (Variant of '{variant}')")
+            
+            page_num = 0
+            while (time.time() - search_start_time) < max_search_duration:
+                page_num += 1
 
-            page_releases, extracted_search_id = _search_single_page(
-                shared_state, host, search_string, search_id, page_num,
-                imdb_id, mirror, request_from, season, episode
-            )
+                page_releases, extracted_search_id = _search_single_page(
+                    shared_state, host, search_keywords, search_id, page_num,
+                    imdb_id, mirror, request_from, season, episode
+                )
 
-            # Update search_id from first page
-            if page_num == 1:
-                search_id = extracted_search_id
-                if not search_id:
-                    info(f"{hostname}: Could not extract search ID, stopping pagination")
+                # Update search_id from first page of THIS variant
+                if page_num == 1:
+                    search_id = extracted_search_id
+                
+                if not page_releases:
                     break
 
-            # Add releases from this page
-            releases.extend(page_releases)
-            debug(f"{hostname}: [Page {page_num}] completed with {len(page_releases)} valid releases")
-
-            # Stop if this page returned 0 results
-            if len(page_releases) == 0:
-                debug(f"{hostname}: [Page {page_num}] returned 0 results, stopping pagination")
+                releases.extend(page_releases)
+                
+                # Wenn wir genug Ergebnisse auf Seite 1 haben, reicht das meistens
+                if len(page_releases) > 5:
+                    break
+            
+            if releases:
+                debug(f"{hostname}: Found {len(releases)} results for variant '{variant}', skipping further variants.")
                 break
 
     except Exception as e:

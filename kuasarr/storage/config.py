@@ -53,8 +53,6 @@ class Config(object):
         ],
         'Captcha': [
             ("service", "str", "dbc"),  # "dbc" oder "2captcha"
-            ("dbc_username", "secret", ""),
-            ("dbc_password", "secret", ""),
             ("dbc_authtoken", "secret", ""),
             ("twocaptcha_api_key", "secret", ""),
             ("timeout", "str", "120"),

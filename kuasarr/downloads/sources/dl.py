@@ -426,12 +426,15 @@ def get_dl_download_links(shared_state, url, mirror, title, password):
 
     Note: The password parameter is unused intentionally - password must be extracted from the post.
     """
-
     host = shared_state.values["config"]("Hostnames").get(hostname)
+    if not host:
+        return {"links": [], "password": ""}
+
+    clean_host = host.replace("www.", "")
 
     sess = retrieve_and_validate_session(shared_state)
     if not sess:
-        info(f"Could not retrieve valid session for {host}")
+        info(f"Could not retrieve valid session for {clean_host}")
         return {"links": [], "password": ""}
 
     try:
@@ -446,6 +449,10 @@ def get_dl_download_links(shared_state, url, mirror, title, password):
         # Get all posts in thread
         posts = soup.select('article.message--post')
         if not posts:
+            # Fallback für andere XF2 Themes
+            posts = soup.select('article.message')
+            
+        if not posts:
             info(f"Could not find any posts in thread: {url}")
             return {"links": [], "password": ""}
 
@@ -455,7 +462,7 @@ def get_dl_download_links(shared_state, url, mirror, title, password):
             if not post_content:
                 continue
 
-            links_with_status, extracted_password = extract_links_and_password_from_post(str(post_content), host)
+            links_with_status, extracted_password = extract_links_and_password_from_post(str(post_content), clean_host)
 
             if not links_with_status:
                 continue

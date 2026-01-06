@@ -31,7 +31,7 @@ from kuasarr.providers.captcha.base_client import (
 
 
 TWOCAPTCHA_API_BASE = "https://api.2captcha.com"
-TWOCAPTCHA_AFFILIATE_LINK = "https://2captcha.com?from=12345"
+TWOCAPTCHA_AFFILIATE_LINK = "https://2captcha.com/?from=26376359"
 
 
 class TwoCaptchaError(CaptchaClientError):
@@ -287,22 +287,6 @@ class TwoCaptchaClient(BaseCaptchaClient):
         poll_interval: float = 2.0,
         max_wait: float = 180.0,
     ) -> CaptchaResult:
-        """Solve a CutCaptcha challenge.
-        
-        2Captcha CutCaptcha price: $1.45/1000 (50% cheaper than DBC!)
-        
-        Args:
-            api_key: CutCaptcha API key (e.g. 'SAs61IAI')
-            page_url: URL of the page with the captcha
-            misery_key: CutCaptcha misery key (32 char hex)
-            proxy: Optional proxy
-            proxy_type: Proxy type (HTTP, SOCKS4, SOCKS5)
-            poll_interval: Seconds between status polls
-            max_wait: Maximum seconds to wait
-            
-        Returns:
-            CaptchaResult with solution token
-        """
         try:
             self.get_balance()
         except CaptchaInsufficientCredits:

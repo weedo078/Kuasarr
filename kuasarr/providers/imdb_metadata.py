@@ -63,7 +63,7 @@ def get_localized_title(shared_state, imdb_id, language='de'):
         debug(f"Could not get localized title for {imdb_id} in {language} from IMDb")
 
     localized_title = html.unescape(localized_title)
-    localized_title = re.sub(r"[^a-zA-Z0-9Ã¤Ã¶Ã¼Ã„Ã–ÃœÃŸ&-']", ' ', localized_title).strip()
+    localized_title = re.sub(r"[^a-zA-Z0-9äöüÄÖÜß&-']", ' ', localized_title).strip()
     localized_title = localized_title.replace(" - ", "-")
     localized_title = re.sub(r'\s{2,}', ' ', localized_title)
 
