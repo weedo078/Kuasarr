@@ -242,8 +242,16 @@ def wx_feed(shared_state, start_time, request_from, mirror=None):
         response = requests.get(api_url, headers=headers, timeout=10)
         
         if response.status_code == 200:
-            data = response.json()
-            releases = _parse_api_releases(data, shared_state, wx, password, mirror)
+            try:
+                data = response.json()
+                releases = _parse_api_releases(data, shared_state, wx, password, mirror)
+            except ValueError:
+                debug(f"{hostname.upper()} API returned invalid JSON, falling back to HTML")
+                # Fallback to HTML
+                html_url = f"https://{wx}/{feed_type}"
+                response = requests.get(html_url, headers=headers, timeout=10)
+                soup = BeautifulSoup(response.content, "html.parser")
+                releases = _parse_html_releases(soup, shared_state, wx, password, mirror)
         else:
             # Fallback to HTML
             html_url = f"https://{wx}/{feed_type}"
@@ -289,13 +297,26 @@ def wx_search(shared_state, start_time, request_from, search_string, mirror=None
         response = requests.get(api_url, headers=headers, timeout=10)
         
         if response.status_code == 200:
-            data = response.json()
-            releases = _parse_api_releases(
-                data, shared_state, wx, password, mirror,
-                request_from=request_from,
-                search_string=search_string,
-                season=season, episode=episode
-            )
+            try:
+                data = response.json()
+                releases = _parse_api_releases(
+                    data, shared_state, wx, password, mirror,
+                    request_from=request_from,
+                    search_string=search_string,
+                    season=season, episode=episode
+                )
+            except ValueError:
+                debug(f"{hostname.upper()} search API returned invalid JSON, falling back to HTML")
+                # Fallback to HTML search
+                html_url = f"https://{wx}/search?q={q}"
+                response = requests.get(html_url, headers=headers, timeout=10)
+                soup = BeautifulSoup(response.content, "html.parser")
+                releases = _parse_html_releases(
+                    soup, shared_state, wx, password, mirror,
+                    request_from=request_from,
+                    search_string=search_string,
+                    season=season, episode=episode
+                )
         else:
             # Fallback to HTML search
             html_url = f"https://{wx}/search?q={q}"

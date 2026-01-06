@@ -312,6 +312,18 @@ def fetch_via_requests_session(shared_state, method: str, target_url: str, post_
     â€“ timeout: seconds
     """
     sess = retrieve_and_validate_session(shared_state)
+    if not sess:
+        debug(f"{hostname}: retrieve_and_validate_session returned None, creating dummy response")
+        # Return an empty dummy response object that has a .content, .text, .status_code attribute
+        class DummyResponse:
+            def __init__(self):
+                self.content = b""
+                self.text = ""
+                self.status_code = 500
+                self.history = []
+            def raise_for_status(self):
+                raise requests.exceptions.HTTPError("Failed to create session")
+        return DummyResponse()
 
     # Execute request
     if method.upper() == "GET":

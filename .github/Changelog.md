@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.4] - 2026-01-06
+
+### Improved
+- **DL Source (Dirty-Leech)**:
+    - Robust mirror name extraction (recognizes "Download via Rapidgator" etc.).
+    - Improved FileCrypt status image detection (searches preceding siblings in XenForo 2 posts).
+    - Lenient green detection for status icons, supporting Palette/RGBA images.
+    - Added more known hosters to the detection list (NitroFlare, Filer, Katfile).
+- **CLI**: Added `--debug` flag to enable debug logging via command line.
+
+### Fixed
+- **WX Source**: Added JSON validation for API responses to prevent crashes on invalid data, with automatic fallback to HTML parsing.
+- **AL Source**: Added session validation to prevent `NoneType` attribute errors when FlareSolverr or session creation fails.
+
+---
+
 ## [1.10.3] - 2026-01-06
 
 ### Fixed

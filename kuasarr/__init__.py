@@ -45,7 +45,11 @@ def run():
         parser.add_argument("--external_address", help="External address for CAPTCHA notifications")
         parser.add_argument("--discord", help="Discord Webhook URL")
         parser.add_argument("--hostnames", help="Public HTTP(s) Link that contains hostnames definition.")
+        parser.add_argument("--debug", help="Enable debug logging", action="store_true")
         arguments = parser.parse_args()
+
+        if arguments.debug:
+            os.environ['DEBUG'] = '1'
 
         sys.stdout = Unbuffered(sys.stdout)
 

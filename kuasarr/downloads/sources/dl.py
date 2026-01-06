@@ -74,21 +74,39 @@ def extract_mirror_name_from_link(link_element):
     link_text = link_element.get_text(strip=True)
     common_non_hosters = {'download', 'mirror', 'link', 'hier', 'click', 'klick', 'code', 'spoiler'}
 
-    # Known hoster patterns for image detection
+    # Known hoster patterns for text/image detection
     known_hosters = {
-        'rapidgator': ['rapidgator', 'rg'],
-        'ddownload': ['ddownload', 'ddl'],
+        'rapidgator': ['rapidgator', 'rg.to', 'rg'],
+        'ddownload': ['ddownload', 'ddl.to', 'ddl'],
         'turbobit': ['turbobit'],
         '1fichier': ['1fichier'],
+        'nitroflare': ['nitroflare'],
+        'filer': ['filer'],
+        'katfile': ['katfile'],
     }
+
+    # 1. Check link text for known hosters first (high priority)
+    if link_text:
+        text_lower = link_text.lower()
+        for hoster, patterns in known_hosters.items():
+            if any(p in text_lower for p in patterns):
+                return hoster
+
+    # 2. Check nearby text/images
+    common_non_hosters = {'download', 'mirror', 'link', 'hier', 'click', 'klick', 'code', 'spoiler', 'via', 'über', 'untereinander', 'kompatibel', 'kein', 'passwort', 'ladbar', 'einzeln'}
 
     # Skip if link text is a URL
     if link_text and len(link_text) > 2 and not link_text.startswith('http'):
         cleaned = re.sub(r'[^\w\s-]', '', link_text).strip().lower()
         if cleaned and cleaned not in common_non_hosters:
-            main_part = cleaned.split()[0] if ' ' in cleaned else cleaned
-            if 2 < len(main_part) < 30:
-                return main_part
+            # If it's a multi-word string like "Download via Rapidgator", 
+            # we already checked for known hosters above.
+            # Otherwise, take the last word if it's not common.
+            parts = cleaned.split()
+            if parts:
+                candidate = parts[-1]
+                if candidate not in common_non_hosters and 2 < len(candidate) < 30:
+                    return candidate
 
     # Check previous siblings including text nodes
     for sibling in link_element.previous_siblings:
@@ -167,7 +185,7 @@ def extract_status_url_from_html(link_element, crypter_type):
     if crypter_type != "filecrypt":
         return None
 
-    # Look for status image in the link itself
+    # 1. Look for status image in the link itself
     img = link_element.find('img')
     if img:
         for attr in ['src', 'data-url']:
@@ -175,25 +193,53 @@ def extract_status_url_from_html(link_element, crypter_type):
             if 'filecrypt.cc/Stat/' in url:
                 return url
 
-    # Look in siblings
+    # 2. Look in siblings (both next and previous)
+    # XenForo 2 often puts the status image in a separate line/div before or after the link
+    search_distance = 6  # Look up to 6 siblings away
+    
+    # Check next siblings
+    count = 0
     for sibling in link_element.next_siblings:
+        if count >= search_distance:
+            break
         if not hasattr(sibling, 'name') or sibling.name is None:
             continue
-        if sibling.name == 'img':
-            for attr in ['src', 'data-url']:
-                url = sibling.get(attr, '')
-                if 'filecrypt.cc/Stat/' in url:
-                    return url
-        # Check nested images
-        nested_img = sibling.find('img') if hasattr(sibling, 'find') else None
-        if nested_img:
-            for attr in ['src', 'data-url']:
-                url = nested_img.get(attr, '')
-                if 'filecrypt.cc/Stat/' in url:
-                    return url
-        # Stop at next link
+        
+        # Stop if we hit another significant link (likely for a different mirror)
         if sibling.name == 'a':
+            href = sibling.get('href', '')
+            if any(c in href.lower() for c in ['filecrypt', 'hide', 'keeplinks', 'tolink']):
+                break
+        
+        count += 1
+        img = sibling.find('img') if sibling.name != 'img' else sibling
+        if img:
+            for attr in ['src', 'data-url']:
+                url = img.get(attr, '')
+                if 'filecrypt.cc/Stat/' in url:
+                    return url
+
+    # Check previous siblings
+    count = 0
+    for sibling in link_element.previous_siblings:
+        if count >= search_distance:
             break
+        if not hasattr(sibling, 'name') or sibling.name is None:
+            continue
+        
+        # Stop if we hit another significant link
+        if sibling.name == 'a':
+            href = sibling.get('href', '')
+            if any(c in href.lower() for c in ['filecrypt', 'hide', 'keeplinks', 'tolink']):
+                break
+                
+        count += 1
+        img = sibling.find('img') if sibling.name != 'img' else sibling
+        if img:
+            for attr in ['src', 'data-url']:
+                url = img.get(attr, '')
+                if 'filecrypt.cc/Stat/' in url:
+                    return url
 
     return None
 
@@ -267,14 +313,20 @@ def image_has_green(image_data):
     """
     try:
         img = Image.open(BytesIO(image_data))
+        # Handle Palette images with transparency (fix UserWarning and potential transparency issues)
+        if img.mode in ('P', 'RGBA'):
+            img = img.convert('RGBA')
+            # Create a white background for transparent images
+            background = Image.new('RGBA', img.size, (255, 255, 255))
+            img = Image.alpha_composite(background, img)
+            
         img = img.convert('RGB')
-
         pixels = list(img.getdata())
 
         for r, g, b in pixels:
-            # Check if pixel is greenish: green channel is dominant
-            # and has a reasonable absolute value
-            if g > 100 and g > r * 1.3 and g > b * 1.3:
+            # More lenient green detection for FileCrypt status icons
+            # Green icons are typically: r < 150, g > 150, b < 150
+            if g > 130 and g > r * 1.1 and g > b * 1.1:
                 return True
 
         return False
@@ -357,9 +409,13 @@ def check_links_online_status(links_with_status):
 def extract_links_and_password_from_post(post_content, host):
     """
     Extract download links and password from a forum post.
-    Returns links with status URLs for online checking.
+    Returns:
+        direct_links: list of href strings
+        protected_links: list of [href, identifier, status_url]
+        password: str
     """
-    links = []  # [href, identifier, status_url]
+    direct_links = []
+    protected_links = []
     soup = BeautifulSoup(post_content, 'html.parser')
 
     # Build status map for FileCrypt links (handles separated status images)
@@ -371,6 +427,7 @@ def extract_links_and_password_from_post(post_content, host):
         if href.startswith('/') or host in href:
             continue
 
+        crypter_type = None
         if re.search(r'filecrypt\.', href, re.IGNORECASE):
             crypter_type = "filecrypt"
         elif re.search(r'hide\.', href, re.IGNORECASE):
@@ -379,12 +436,33 @@ def extract_links_and_password_from_post(post_content, host):
             crypter_type = "keeplinks"
         elif re.search(r'tolink\.', href, re.IGNORECASE):
             crypter_type = "tolink"
-        else:
+        
+        # Check for direct hoster links (Rapidgator, DDownload etc.)
+        is_direct = False
+        if not crypter_type:
+            for hoster, patterns in {
+                'rapidgator': ['rapidgator.net', 'rg.to'],
+                'ddownload': ['ddownload.com', 'ddl.to'],
+                'turbobit': ['turbobit.net'],
+                '1fichier': ['1fichier.com'],
+                'nitroflare': ['nitroflare.com'],
+                'katfile': ['katfile.com'],
+            }.items():
+                if any(p in href.lower() for p in patterns):
+                    is_direct = True
+                    break
+        
+        if not crypter_type and not is_direct:
             debug(f"Unsupported link crypter/hoster found: {href}")
             continue
 
         mirror_name = extract_mirror_name_from_link(link)
-        identifier = mirror_name if mirror_name else crypter_type
+        identifier = mirror_name if mirror_name else (crypter_type or "direct")
+
+        if is_direct:
+            if href not in direct_links:
+                direct_links.append(href)
+            continue
 
         # Get status URL - try extraction first, then status map, then generation
         status_url = extract_status_url_from_html(link, crypter_type)
@@ -402,8 +480,8 @@ def extract_links_and_password_from_post(post_content, host):
             status_url = generate_status_url(href, crypter_type)
 
         # Avoid duplicates (check href and identifier)
-        if not any(l[0] == href and l[1] == identifier for l in links):
-            links.append([href, identifier, status_url])
+        if not any(l[0] == href and l[1] == identifier for l in protected_links):
+            protected_links.append([href, identifier, status_url])
             status_info = f"status: {status_url}" if status_url else "no status URL"
             if mirror_name:
                 debug(f"Found {crypter_type} link for mirror: {mirror_name} ({status_info})")
@@ -411,10 +489,10 @@ def extract_links_and_password_from_post(post_content, host):
                 debug(f"Found {crypter_type} link ({status_info})")
 
     password = ""
-    if links:
+    if direct_links or protected_links:
         password = extract_password_from_post(soup, host)
 
-    return links, password
+    return direct_links, protected_links, password
 
 
 def get_dl_download_links(shared_state, url, mirror, title, password):
@@ -428,21 +506,21 @@ def get_dl_download_links(shared_state, url, mirror, title, password):
     """
     host = shared_state.values["config"]("Hostnames").get(hostname)
     if not host:
-        return {"links": [], "password": ""}
+        return {"direct": [], "protected": [], "password": ""}
 
     clean_host = host.replace("www.", "")
 
     sess = retrieve_and_validate_session(shared_state)
     if not sess:
         info(f"Could not retrieve valid session for {clean_host}")
-        return {"links": [], "password": ""}
+        return {"direct": [], "protected": [], "password": ""}
 
     try:
         response = fetch_via_requests_session(shared_state, method="GET", target_url=url, timeout=30)
 
         if response.status_code != 200:
             info(f"Failed to load thread page: {url} (Status: {response.status_code})")
-            return {"links": [], "password": ""}
+            return {"direct": [], "protected": [], "password": ""}
 
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -454,7 +532,7 @@ def get_dl_download_links(shared_state, url, mirror, title, password):
             
         if not posts:
             info(f"Could not find any posts in thread: {url}")
-            return {"links": [], "password": ""}
+            return {"direct": [], "protected": [], "password": ""}
 
         # Iterate through posts to find one with online links
         for post_index, post in enumerate(posts):
@@ -462,25 +540,29 @@ def get_dl_download_links(shared_state, url, mirror, title, password):
             if not post_content:
                 continue
 
-            links_with_status, extracted_password = extract_links_and_password_from_post(str(post_content), clean_host)
+            direct_links, protected_links_with_status, extracted_password = extract_links_and_password_from_post(str(post_content), clean_host)
 
-            if not links_with_status:
+            if not direct_links and not protected_links_with_status:
                 continue
 
-            # Check which links are online
-            online_links = check_links_online_status(links_with_status)
+            # Check which protected links are online
+            online_protected = check_links_online_status(protected_links_with_status)
 
-            if online_links:
+            if direct_links or online_protected:
                 post_info = "first post" if post_index == 0 else f"post #{post_index + 1}"
-                debug(f"Found {len(online_links)} online link(s) in {post_info} for: {title}")
-                return {"links": online_links, "password": extracted_password}
+                debug(f"Found {len(direct_links)} direct and {len(online_protected)} protected online link(s) in {post_info} for: {title}")
+                return {
+                    "direct": direct_links,
+                    "protected": online_protected,
+                    "password": extracted_password
+                }
             else:
                 debug(f"All links in post #{post_index + 1} are offline, checking next post...")
 
         info(f"No online download links found in any post: {url}")
-        return {"links": [], "password": ""}
+        return {"direct": [], "protected": [], "password": ""}
 
     except Exception as e:
         info(f"Error extracting download links from {url}: {e}")
         invalidate_session(shared_state)
-        return {"links": [], "password": ""}
+        return {"direct": [], "protected": [], "password": ""}
