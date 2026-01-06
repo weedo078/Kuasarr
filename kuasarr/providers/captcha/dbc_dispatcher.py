@@ -94,10 +94,16 @@ class DBCDispatcher:
         while not self._stop_event.is_set():
             try:
                 self._run_once()
+            except (BrokenPipeError, EOFError, ConnectionResetError):
+                # This happens if the multiprocessing Manager is shut down
+                info("DBC Dispatcher: Shared state manager disconnected. Stopping dispatcher thread...")
+                self._stop_event.set()
+                break
             except Exception as exc:
                 info(f"DBC Dispatcher error: {exc}")
             finally:
-                self._stop_event.wait(self.interval_seconds)
+                if not self._stop_event.is_set():
+                    self._stop_event.wait(self.interval_seconds)
 
     def _run_once(self) -> None:
         """Single dispatch iteration."""

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.3] - 2026-01-06
+
+### Fixed
+- **Stability**: Added resilience against `BrokenPipeError` in background processes (DBC Dispatcher, Update Checker, JDownloader Connection).
+- **Process Management**: Improved shutdown logic to ensure all child processes are terminated cleanly.
+- **Logging**: Added better error logging for critical startup failures.
+
 ## [1.10.2] - 2026-01-06
 
 ### Fixed

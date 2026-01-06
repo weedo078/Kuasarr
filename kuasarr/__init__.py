@@ -58,7 +58,7 @@ def run():
         bottom_border = top_border
         formatted_lines = [f"| {line.ljust(banner_width - 4)} |" for line in banner_lines]
         print("\n".join([top_border, *formatted_lines, bottom_border]))
-
+       
         print("\n===== Startup Info =====")
         port = int('9999')
         config_path = ""
@@ -358,11 +358,20 @@ def run():
 
         try:
             get_api(shared_state_dict, shared_state_lock)
-        except KeyboardInterrupt:
+        except Exception as e:
+            if not isinstance(e, KeyboardInterrupt):
+                info(f"Kuasarr encountered a critical error: {e}")
+        finally:
+            info("Stopping all background processes...")
             if dbc_dispatcher:
                 dbc_dispatcher.stop()
-            jdownloader.kill()
-            updater.kill()
+            if 'jdownloader' in locals() and jdownloader.is_alive():
+                jdownloader.terminate()
+                jdownloader.join(timeout=2)
+            if 'updater' in locals() and updater.is_alive():
+                updater.terminate()
+                updater.join(timeout=2)
+            info("Kuasarr stopped.")
             sys.exit(0)
 
 
@@ -379,12 +388,15 @@ def update_checker(shared_state_dict, shared_state_lock):
             try:
                 update_available = version.newer_version_available()
                 link = version.LATEST_RELEASE_LINK
+            except (BrokenPipeError, EOFError, ConnectionResetError):
+                debug("Update Checker: Shared state manager disconnected. Stopping...")
+                break
             except Exception as e:
                 info(f"Error getting latest version: {e}")
                 info(f'Please manually check: "{link}" for more information!')
                 update_available = None
 
-            if update_available and shared_state.values["last_checked_version"] != update_available:
+            if update_available and shared_state.values.get("last_checked_version") != update_available:
                 shared_state.update("last_checked_version", update_available)
                 info(message)
                 info(f"Please update to {update_available} as soon as possible!")
@@ -397,8 +409,12 @@ def update_checker(shared_state_dict, shared_state_lock):
 
             # wait one hour before next check
             time.sleep(60 * 60)
+    except (BrokenPipeError, EOFError, ConnectionResetError):
+        debug("Update Checker: Shared state manager disconnected. Stopping...")
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        info(f"Update Checker encountered an unexpected error: {e}")
 
 
 def jdownloader_connection(shared_state_dict, shared_state_lock):
@@ -412,7 +428,7 @@ def jdownloader_connection(shared_state_dict, shared_state_lock):
             i = 0
             while i < 10:
                 i += 1
-                info(f'Connection {i} to JDownloader failed. Device name: "{shared_state.values["device"]}"')
+                info(f'Connection {i} to JDownloader failed. Device name: "{shared_state.values.get("device")}"')
                 time.sleep(60)
                 shared_state.set_device_from_config()
                 connection_established = shared_state.get_device() and shared_state.get_device().name
@@ -440,6 +456,8 @@ def jdownloader_connection(shared_state_dict, shared_state_lock):
         except Exception as e:
             print(f"Error starting downloads: {e}")
 
+    except (BrokenPipeError, EOFError, ConnectionResetError):
+        debug("JDownloader Connection: Shared state manager disconnected. Stopping...")
     except KeyboardInterrupt:
         pass
 
