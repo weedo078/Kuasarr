@@ -1,6 +1,11 @@
 ﻿# Virtual environments
 kuasarr_venv/
 *venv*/
+.venv-kuasarr/
+.github/
+.pytest_cache
+
+
 env/
 .env
 *.env
@@ -51,6 +56,7 @@ debug_*.py
 .cursor/
 .pytest_cache/
 .windsurf/
+scripts/
 
 # Git
 .git/
@@ -63,6 +69,7 @@ helper/
 *.md
 !README.md
 docs/
+release/
 
 # OS files
 .DS_Store

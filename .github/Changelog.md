@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.2] - 2026-01-06
+
+### Fixed
+- **Startup**: Fixed `UnboundLocalError: captcha_service` during initialization.
+
+## [1.10.1] - 2026-01-06
+
+### Added
+- **2Captcha Integration**: Support for 2Captcha as an alternative captcha service alongside DeathByCaptcha.
+- **FlareSolverr Integration for DL**: Automatic Cloudflare bypass for searches and downloads on Dirty-Leech.
+
+### Improved
+- **DL Search (Dirty-Leech)**:
+    - Intelligent title shortening (fallback to main title for IMDb searches).
+    - Season/Episode are now directly integrated into the search terms.
+    - More robust CSS selectors for XenForo 2 themes.
+    - Relaxed resolution filters for higher hit rates.
+- **DL Download**: Fix for URL generation (avoiding `www.` duplicates) and improved post extraction.
+- **DBC Dispatcher**: Dynamic display of the selected captcha service during startup.
+
+### Fixed
+- **IMDb Metadata**: Correction of an encoding error for German umlauts in search terms (e.g., "Shameless - Nicht ganz nüchtern").
+- **DL Download Mismatch**: Fix for passing link types (Direct vs. Protected) to the dispatcher.
+
+---
+
 ## [1.10.0] - 2026-01-06
 
 ### Added

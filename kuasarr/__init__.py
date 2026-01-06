@@ -59,14 +59,6 @@ def run():
         formatted_lines = [f"| {line.ljust(banner_width - 4)} |" for line in banner_lines]
         print("\n".join([top_border, *formatted_lines, bottom_border]))
 
-        print("\n===== Recommended Services =====")
-        print('For convenient universal premium downloads use: "http://real-debrid.com/?id=13910652"')
-        
-        if captcha_service == '2captcha':
-            print('Automated CAPTCHA solutions via 2Captcha (50% cheaper). Get yours here: https://2captcha.com/?from=26376359')
-        else:
-            print('Automated CAPTCHA solutions via DBC. Get yours here: https://deathbycaptcha.com?refid=1237432788a')
-
         print("\n===== Startup Info =====")
         port = int('9999')
         config_path = ""
@@ -143,6 +135,13 @@ def run():
         # Captcha service selection
         captcha_service = (captcha_config.get('service') or 'dbc').lower().strip()
         shared_state.update("captcha_service", captcha_service)
+
+        print("\n===== Recommended Services =====")
+        print('For convenient universal premium downloads use: "http://real-debrid.com/?id=13910652"')
+        if captcha_service == '2captcha':
+            print('Automated CAPTCHA solutions via 2Captcha (50% cheaper). Get yours here: https://2captcha.com/?from=26376359')
+        else:
+            print('Automated CAPTCHA solutions via DBC. Get yours here: https://deathbycaptcha.com?refid=1237432788a')
         
         # DBC Credentials: Config > ENV
         dbc_username_config = captcha_config.get('dbc_username') or ""
