@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.0] - 2026-01-06
+
+### Added
+- **2Captcha Integration**: Support for [2Captcha](https://2captcha.com) as a cheaper alternative to DeathByCaptcha (50% cheaper for CutCaptcha).
+- **Consolidated Captcha Config**: New `[Captcha]` section in `kuasarr.ini` replaces the old `[DeathByCaptcha]` section and supports multiple providers.
+- **Abstracted Captcha Client**: New provider architecture allows for easier integration of additional CAPTCHA services.
+- **New API Endpoints**:
+  - `POST /dbc/api/test_2captcha/` for verifying 2Captcha API keys.
+  - Updated existing DBC endpoints to support multi-service status and balance.
+
+### Improved
+- **Captcha Setup**: Initial setup page now supports choosing between DeathByCaptcha and 2Captcha.
+- **Code Architecture**: Centralized captcha factory and base classes for better maintainability.
+
+### Fixed
+- **DL Download Bug**: Fixed `TypeError` in `handle_dl` where a missing password parameter caused download failures.
+- **Startup Logic**: Fixed `KeyError: 'DeathByCaptcha'` during startup when the legacy config section was missing.
+
+---
+
 ## [1.9.0] - 2026-01-05
 
 ### Added
