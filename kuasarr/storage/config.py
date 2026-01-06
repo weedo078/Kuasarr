@@ -51,15 +51,17 @@ class Config(object):
         'FlareSolverr': [
             ("url", "str", ""),
         ],
-        'DeathByCaptcha': [
-            ("username", "secret", ""),
-            ("password", "secret", ""),
-            ("authtoken", "secret", ""),
+        'Captcha': [
+            ("service", "str", "dbc"),  # "dbc" oder "2captcha"
+            ("dbc_username", "secret", ""),
+            ("dbc_password", "secret", ""),
+            ("dbc_authtoken", "secret", ""),
+            ("twocaptcha_api_key", "secret", ""),
             ("timeout", "str", "120"),
             ("max_retries", "str", "3"),
             ("retry_backoff", "str", "5"),
-        ],        
-        'AD': [
+        ],
+                'AD': [
             ("user", "secret", ""),
             ("password", "secret", "")
         ],

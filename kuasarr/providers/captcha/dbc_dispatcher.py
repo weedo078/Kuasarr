@@ -21,13 +21,19 @@ from bs4 import BeautifulSoup
 from kuasarr.providers import shared_state
 from kuasarr.providers.captcha import push_jobs
 from kuasarr.providers.network.cloudflare import is_cloudflare_challenge, ensure_session_cf_bypassed
+from kuasarr.providers.captcha import create_captcha_client
+from kuasarr.providers.captcha.base_client import (
+    CaptchaResult,
+    CaptchaStatus,
+    CaptchaClientError,
+    CaptchaInsufficientCredits,
+    CaptchaServiceOverload,
+)
 from kuasarr.providers.captcha.dbc_client import (
     DeathByCaptchaClient,
     DBCError,
     DBCInsufficientCredits,
     DBCServiceOverload,
-    CaptchaResult,
-    CaptchaStatus,
     create_dbc_client,
     DBC_AFFILIATE_LINK,
 )
@@ -104,12 +110,12 @@ class DBCDispatcher:
             debug(f"DBC Dispatcher paused for {self._backoff_until - now:.1f}s")
             return
 
-        # Create or reuse client
+        # Create or reuse client (supports both DBC and 2Captcha)
         if not self._client:
-            self._client = create_dbc_client(self.shared_state)
+            self._client = create_captcha_client(self.shared_state)
         
         if not self._client:
-            debug("DBC Dispatcher skipped - no client available")
+            debug("Captcha Dispatcher skipped - no client available")
             return
 
         # Cleanup expired jobs
@@ -157,16 +163,16 @@ class DBCDispatcher:
                     dispatched += 1
                     self._failure_streak = 0
                     self._backoff_until = 0.0
-            except DBCInsufficientCredits:
-                info(f"⚠️ DBC credits exhausted! Top up at: {DBC_AFFILIATE_LINK}")
+            except (DBCInsufficientCredits, CaptchaInsufficientCredits):
+                info(f"⚠️ Captcha credits exhausted!")
                 self._record_failure()
                 break
-            except DBCServiceOverload:
-                info("DBC service overloaded, pausing...")
+            except (DBCServiceOverload, CaptchaServiceOverload):
+                info("Captcha service overloaded, pausing...")
                 self._record_failure()
                 break
-            except DBCError as exc:
-                info(f"DBC error for package {package_id}: {exc}")
+            except (DBCError, CaptchaClientError) as exc:
+                info(f"Captcha error for package {package_id}: {exc}")
                 self._record_failure()
                 continue
 
@@ -297,10 +303,10 @@ class DBCDispatcher:
                                 info(f"Download successfully started for {title} (Circle-Captcha)")
                                 return True
                         
-            except DBCInsufficientCredits:
+            except (DBCInsufficientCredits, CaptchaInsufficientCredits):
                 raise
-            except DBCError as exc:
-                info(f"DBC error for link {link_url}: {exc}")
+            except (DBCError, CaptchaClientError) as exc:
+                info(f"Captcha error for link {link_url}: {exc}")
                 continue
             except Exception as exc:
                 info(f"Error processing {link_url}: {exc}")
@@ -476,7 +482,7 @@ class DBCDispatcher:
                     return result.text
                 else:
                     info(f"CutCaptcha solving failed: {result.status}")
-            except DBCError as e:
+            except (DBCError, CaptchaClientError) as e:
                 info(f"CutCaptcha error: {e}")
         
         # Check for reCAPTCHA
@@ -494,7 +500,7 @@ class DBCDispatcher:
                     )
                     if result.is_solved:
                         return result.text
-                except DBCError as e:
+                except (DBCError, CaptchaClientError) as e:
                     info(f"reCAPTCHA error: {e}")
         
         # Check for image captcha

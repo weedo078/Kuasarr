@@ -11,12 +11,18 @@ from bottle import request, abort, response
 from kuasarr.downloads import fail
 from kuasarr.providers import shared_state
 from kuasarr.providers.captcha import push_jobs
+from kuasarr.providers.captcha import create_captcha_client
+from kuasarr.providers.captcha.base_client import (
+    CaptchaClientError,
+    CaptchaInsufficientCredits,
+)
 from kuasarr.providers.captcha.dbc_client import (
     create_dbc_client,
     DBCError,
     DBCInsufficientCredits,
     DBC_AFFILIATE_LINK,
 )
+from kuasarr.providers.captcha.twocaptcha_client import TWOCAPTCHA_AFFILIATE_LINK
 from kuasarr.providers.log import info, debug
 from kuasarr.providers.notifications import send_discord_message
 from kuasarr.providers.statistics import StatsHelper
@@ -27,10 +33,15 @@ def setup_dbc_routes(app):
     
     @app.get("/dbc/api/status/")
     def dbc_status():
-        """Get DBC status including balance and job statistics."""
+        """Get captcha service status including balance and job statistics."""
         try:
+            from kuasarr.storage.config import Config
+            
             dbc_enabled = shared_state.values.get("dbc_enabled", False)
-            dbc_config = shared_state.values.get("dbc_config", {})
+            
+            # Get captcha service config
+            captcha_config = Config('Captcha')
+            service = (captcha_config.get('service') or 'dbc').lower().strip()
             
             # Count protected packages
             protected = shared_state.get_db("protected").retrieve_all_titles() or []
@@ -47,45 +58,47 @@ def setup_dbc_routes(app):
             
             # Get balance if enabled
             balance_info = None
+            affiliate_link = DBC_AFFILIATE_LINK if service == 'dbc' else TWOCAPTCHA_AFFILIATE_LINK
+            
             if dbc_enabled:
                 try:
-                    client = create_dbc_client(shared_state)
+                    client = create_captcha_client(shared_state)
                     if client:
                         account = client.get_account_info()
                         balance_info = {
                             "balance_cents": account.balance,
                             "balance_dollars": account.balance_dollars,
-                            "rate": account.rate,
-                            "is_banned": account.is_banned,
+                            "service": service,
                         }
-                except DBCInsufficientCredits:
+                except (DBCInsufficientCredits, CaptchaInsufficientCredits):
                     balance_info = {
                         "balance_cents": 0,
                         "balance_dollars": 0,
                         "error": "No credits",
-                        "affiliate_link": DBC_AFFILIATE_LINK,
+                        "affiliate_link": affiliate_link,
                     }
-                except DBCError as e:
+                except (DBCError, CaptchaClientError) as e:
                     balance_info = {"error": str(e)}
             
             return {
-                "dbc_enabled": dbc_enabled,
-                "dbc_configured": bool(dbc_config.get("authtoken") or (dbc_config.get("username") and dbc_config.get("password"))),
+                "captcha_enabled": dbc_enabled,
+                "captcha_service": service,
+                "captcha_configured": bool(client) if dbc_enabled else False,
                 "protected_packages": protected_count,
                 "jobs": job_stats,
                 "balance": balance_info,
-                "affiliate_link": DBC_AFFILIATE_LINK,
+                "affiliate_link": affiliate_link,
             }
         except Exception as e:
             return {"error": str(e)}
     
     @app.get("/dbc/api/balance/")
     def dbc_balance():
-        """Get current DBC account balance."""
+        """Get current captcha service account balance."""
         try:
-            client = create_dbc_client(shared_state)
+            client = create_captcha_client(shared_state)
             if not client:
-                return abort(503, "DBC not configured")
+                return abort(503, "Captcha service not configured")
             
             try:
                 account = client.get_account_info()
@@ -96,14 +109,13 @@ def setup_dbc_routes(app):
                     "rate": account.rate,
                     "is_banned": account.is_banned,
                 }
-            except DBCInsufficientCredits:
+            except (DBCInsufficientCredits, CaptchaInsufficientCredits):
                 return {
                     "balance_cents": 0,
                     "balance_dollars": 0,
                     "error": "No credits left",
-                    "affiliate_link": DBC_AFFILIATE_LINK,
                 }
-        except DBCError as e:
+        except (DBCError, CaptchaClientError) as e:
             return abort(500, str(e))
         except Exception as e:
             return abort(500, str(e))
@@ -237,7 +249,6 @@ def setup_dbc_routes(app):
         try:
             data = request.json or {}
             
-            # Use provided credentials or fall back to config
             username = data.get("username") or shared_state.values.get("dbc_config", {}).get("username", "")
             password = data.get("password") or shared_state.values.get("dbc_config", {}).get("password", "")
             authtoken = data.get("authtoken") or shared_state.values.get("dbc_config", {}).get("authtoken", "")
@@ -259,6 +270,7 @@ def setup_dbc_routes(app):
                 account = client.get_account_info()
                 return {
                     "success": True,
+                    "service": "dbc",
                     "user_id": account.user_id,
                     "balance_cents": account.balance,
                     "balance_dollars": account.balance_dollars,
@@ -267,12 +279,54 @@ def setup_dbc_routes(app):
             except DBCInsufficientCredits:
                 return {
                     "success": True,
+                    "service": "dbc",
                     "balance_cents": 0,
                     "balance_dollars": 0,
                     "warning": "No credits left",
                     "affiliate_link": DBC_AFFILIATE_LINK,
                 }
         except DBCError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    @app.post("/dbc/api/test_2captcha/")
+    def test_2captcha_credentials():
+        """Test 2Captcha API key by fetching balance."""
+        try:
+            data = request.json or {}
+            
+            api_key = data.get("api_key", "")
+            
+            if not api_key:
+                return abort(400, "No API key provided")
+            
+            from kuasarr.providers.captcha.twocaptcha_client import TwoCaptchaClient
+            
+            client = TwoCaptchaClient(
+                api_key=api_key,
+                timeout=30,
+                max_retries=1,
+            )
+            
+            try:
+                account = client.get_account_info()
+                return {
+                    "success": True,
+                    "service": "2captcha",
+                    "balance_cents": account.balance,
+                    "balance_dollars": account.balance_dollars,
+                }
+            except CaptchaInsufficientCredits:
+                return {
+                    "success": True,
+                    "service": "2captcha",
+                    "balance_cents": 0,
+                    "balance_dollars": 0,
+                    "warning": "No credits left",
+                    "affiliate_link": TWOCAPTCHA_AFFILIATE_LINK,
+                }
+        except CaptchaClientError as e:
             return {"success": False, "error": str(e)}
         except Exception as e:
             return {"success": False, "error": str(e)}

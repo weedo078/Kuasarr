@@ -308,48 +308,54 @@ def dbc_credentials_config(shared_state):
 
     @app.get('/')
     def credentials_form():
-        dbc_cfg = Config('DeathByCaptcha')
-        default_authtoken = dbc_cfg.get('authtoken') or ""
-        default_username = dbc_cfg.get('username') or ""
+        captcha_cfg = Config('Captcha')
+        default_authtoken = captcha_cfg.get('dbc_authtoken') or ""
+        default_twocaptcha = captcha_cfg.get('twocaptcha_api_key') or ""
         form_html = f'''
-        <p>You can provide either your <strong>API Token</strong> (recommended) or username + password.</p>
+        <p>Choose your captcha service and provide credentials.</p>
         <form action="/api/dbc_credentials" method="post">
-            <label for="authtoken">DeathByCaptcha API Token</label>
+            <label for="service">Captcha Service</label>
+            <select id="service" name="service">
+                <option value="dbc">DeathByCaptcha</option>
+                <option value="2captcha">2Captcha (50% cheaper for CutCaptcha)</option>
+            </select><br>
+            
+            <h4>DeathByCaptcha</h4>
+            <label for="authtoken">DBC API Token</label>
             <input type="text" id="authtoken" name="authtoken" placeholder="your_api_token" value="{default_authtoken}"><br>
 
-            <p style="margin:0.5rem 0;">— or —</p>
-
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" placeholder="username@example.com" value="{default_username}"><br>
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" placeholder="Password"><br>
+            <h4>2Captcha</h4>
+            <label for="twocaptcha_api_key">2Captcha API Key</label>
+            <input type="text" id="twocaptcha_api_key" name="twocaptcha_api_key" placeholder="your_2captcha_key" value="{default_twocaptcha}"><br>
 
             {render_button("Save", "primary", {"type": "submit"})}
             {render_button("Skip", "secondary", {"type": "submit", "name": "skip", "value": "1"})}
         </form>
         '''
-        return render_form("Configure DeathByCaptcha credentials", form_html)
+        return render_form("Configure Captcha Service", form_html)
 
     @app.post('/api/dbc_credentials')
     def set_dbc_credentials():
         if request.forms.get("skip"):
             kuasarr.providers.web_server.temp_server_success = True
-            return render_success("Skipped DeathByCaptcha setup. You can configure it later via the Kuasarr UI.", 5)
+            return render_success("Skipped captcha setup. You can configure it later via the Kuasarr UI.", 5)
 
+        service = (request.forms.get("service") or "dbc").strip()
         authtoken = (request.forms.get("authtoken") or "").strip()
-        username = (request.forms.get("username") or "").strip()
-        password = (request.forms.get("password") or "").strip()
+        twocaptcha_key = (request.forms.get("twocaptcha_api_key") or "").strip()
 
-        if not authtoken and (not username or not password):
-            return render_fail("Provide either API token or username + password.")
+        if service == "2captcha" and not twocaptcha_key:
+            return render_fail("Provide 2Captcha API key.")
+        if service == "dbc" and not authtoken:
+            return render_fail("Provide DBC API token.")
 
-        config = Config('DeathByCaptcha')
-        config.save("authtoken", authtoken)
-        config.save("username", username if not authtoken else username)
-        config.save("password", password if not authtoken else password)
+        config = Config('Captcha')
+        config.save("service", service)
+        config.save("dbc_authtoken", authtoken)
+        config.save("twocaptcha_api_key", twocaptcha_key)
 
         kuasarr.providers.web_server.temp_server_success = True
-        return render_success("DeathByCaptcha credentials saved!", 5)
+        return render_success("Captcha credentials saved!", 5)
 
     info(f'Starting DBC credential setup at: "{shared_state.values["internal_address"]}".')
     info("Please enter your DeathByCaptcha API token or credentials there!")

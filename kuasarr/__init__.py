@@ -120,8 +120,8 @@ def run():
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36")
         shared_state.update("helper_active", False)
 
-        # DBC Config
-        dbc_config = Config('DeathByCaptcha')
+        # Captcha Config (supports DBC and 2Captcha)
+        captcha_config = Config('Captcha')
 
         def _to_bool(value, default=False):
             if value is None:
@@ -136,42 +136,57 @@ def run():
             except (TypeError, ValueError, AttributeError):
                 return default
 
+        # Captcha service selection
+        captcha_service = (captcha_config.get('service') or 'dbc').lower().strip()
+        shared_state.update("captcha_service", captcha_service)
+        
         # DBC Credentials: Config > ENV
-        dbc_username_config = dbc_config.get('username') or ""
-        dbc_password_config = dbc_config.get('password') or ""
-        dbc_authtoken_config = dbc_config.get('authtoken') or ""
+        dbc_username_config = captcha_config.get('dbc_username') or ""
+        dbc_password_config = captcha_config.get('dbc_password') or ""
+        dbc_authtoken_config = captcha_config.get('dbc_authtoken') or ""
         
         dbc_username = os.getenv("DBC_USERNAME", dbc_username_config).strip()
         dbc_password = os.getenv("DBC_PASSWORD", dbc_password_config).strip()
         dbc_authtoken = os.getenv("DBC_AUTHTOKEN", dbc_authtoken_config).strip()
         
-        # DBC Settings
-        dbc_timeout = _to_positive_int(os.getenv("DBC_TIMEOUT", dbc_config.get('timeout')), 120)
-        dbc_max_retries = _to_positive_int(os.getenv("DBC_MAX_RETRIES", dbc_config.get('max_retries')), 3)
-        dbc_retry_backoff = _to_positive_int(os.getenv("DBC_RETRY_BACKOFF", dbc_config.get('retry_backoff')), 5)
+        # 2Captcha API Key
+        twocaptcha_api_key = captcha_config.get('twocaptcha_api_key') or ""
+        twocaptcha_api_key = os.getenv("TWOCAPTCHA_API_KEY", twocaptcha_api_key).strip()
+        shared_state.update("twocaptcha_api_key", twocaptcha_api_key)
+        
+        # Captcha Settings
+        captcha_timeout = _to_positive_int(os.getenv("CAPTCHA_TIMEOUT", captcha_config.get('timeout')), 120)
+        captcha_max_retries = _to_positive_int(os.getenv("CAPTCHA_MAX_RETRIES", captcha_config.get('max_retries')), 3)
+        captcha_retry_backoff = _to_positive_int(os.getenv("CAPTCHA_RETRY_BACKOFF", captcha_config.get('retry_backoff')), 5)
         dbc_max_concurrent = _to_positive_int(os.getenv("DBC_MAX_CONCURRENT", "1"), 1)
         
-        # Store DBC config in shared state
+        # Store DBC config in shared state (for backwards compatibility)
         dbc_config_dict = {
             "username": dbc_username,
             "password": dbc_password,
             "authtoken": dbc_authtoken,
-            "timeout": dbc_timeout,
-            "max_retries": dbc_max_retries,
-            "retry_backoff": dbc_retry_backoff,
+            "timeout": captcha_timeout,
+            "max_retries": captcha_max_retries,
+            "retry_backoff": captcha_retry_backoff,
         }
         shared_state.update("dbc_config", dbc_config_dict)
         shared_state.update("dbc_max_concurrent", dbc_max_concurrent)
-        shared_state.update("dbc_retry_backoff", dbc_retry_backoff)
+        shared_state.update("dbc_retry_backoff", captcha_retry_backoff)
         
-        # Check if DBC is configured
-        dbc_enabled = bool(dbc_authtoken or (dbc_username and dbc_password))
+        # Check if captcha service is configured
+        if captcha_service == '2captcha':
+            dbc_enabled = bool(twocaptcha_api_key)
+        else:
+            dbc_enabled = bool(dbc_authtoken or (dbc_username and dbc_password))
         shared_state.update("dbc_enabled", dbc_enabled)
         
         if dbc_enabled:
-            print(f"DBC: Configured (Timeout={dbc_timeout}s, Max-Retries={dbc_max_retries})")
+            if captcha_service == '2captcha':
+                print(f"Captcha: 2Captcha configured (Timeout={captcha_timeout}s, Max-Retries={captcha_max_retries})")
+            else:
+                print(f"Captcha: DBC configured (Timeout={captcha_timeout}s, Max-Retries={captcha_max_retries})")
         else:
-            print("DBC: Not configured (no credentials found)")
+            print("Captcha: Not configured (no credentials found)")
 
         print(f'Config path: "{config_path}"')
 

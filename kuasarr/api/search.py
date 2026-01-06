@@ -142,7 +142,7 @@ def setup_search_routes(app: Bottle) -> None:
     def _parse_items(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         items_raw = payload.get("items")
         if not isinstance(items_raw, list) or not items_raw:
-            raise HTTPError(400, "Mindestens ein Eintrag muss ausgewÃ¤hlt werden")
+            raise HTTPError(400, "Mindestens ein Eintrag muss ausgewählt werden")
 
         parsed_items = []
         for item in items_raw:
@@ -161,7 +161,7 @@ def setup_search_routes(app: Bottle) -> None:
             })
 
         if not parsed_items:
-            raise HTTPError(400, "Die ausgewÃ¤hlten EintrÃ¤ge konnten nicht verarbeitet werden")
+            raise HTTPError(400, "Die ausgewählten Einträge konnten nicht verarbeitet werden")
 
         return parsed_items
 
@@ -254,16 +254,16 @@ def setup_search_routes(app: Bottle) -> None:
 
     @app.get('/search')
     def search_page() -> str:
-        info("WebUI-Suche geÃ¶ffnet")
+        info("WebUI-Suche geöffnet")
 
         refresh_button = render_button("Status aktualisieren", "secondary", {"id": "statusRefresh"})
         search_button = render_button("Suchen", "primary", {"type": "button", "id": "searchSubmit"})
-        back_button = render_button("ZurÃ¼ck", "secondary", {"type": "button", "onclick": "location.href='/'"})
+        back_button = render_button("Zurück", "secondary", {"type": "button", "onclick": "location.href='/'"})
         download_button = render_button("Auswahl herunterladen", "primary", {"id": "downloadSelected", "disabled": "true"})
 
         content = """
         <h1><img src="{images.logo}" type="image/png" alt="kuasarr logo" class="logo"/>kuasarr</h1>
-        <h2>ðŸ” Manuelle Suche</h2>
+        <h2>🔍 Manuelle Suche</h2>
 
         <div class="tabs">
             <button class="tab-btn active" data-tab="search">Suche</button>
@@ -557,7 +557,7 @@ def setup_search_routes(app: Bottle) -> None:
                     meta.appendChild(mirrorSpan);
                     
                     const sizeSpan = document.createElement('span');
-                    sizeSpan.textContent = 'GrÃ¶ÃŸe: ' + String(item.size && item.size.formatted ? item.size.formatted : 'Unbekannt');
+                    sizeSpan.textContent = 'Größe: ' + String(item.size && item.size.formatted ? item.size.formatted : 'Unbekannt');
                     meta.appendChild(sizeSpan);
                     
                     const dateSpan = document.createElement('span');
@@ -576,7 +576,7 @@ def setup_search_routes(app: Bottle) -> None:
 
                     const sourceLink = document.createElement('a');
                     sourceLink.className = 'btn-secondary small';
-                    sourceLink.textContent = 'Quelle Ã¶ffnen';
+                    sourceLink.textContent = 'Quelle öffnen';
                     sourceLink.href = String(item.source || '#');
                     sourceLink.target = '_blank';
                     sourceLink.rel = 'noopener noreferrer';
@@ -611,7 +611,7 @@ def setup_search_routes(app: Bottle) -> None:
             }
 
             async function performSearch(query) {
-                setMessage(dom.message, 'Suche lÃ¤uft...');
+                setMessage(dom.message, 'Suche läuft...');
                 if (dom.resultsContainer) {
                     dom.resultsContainer.innerHTML = '';
                 }
@@ -670,12 +670,12 @@ def setup_search_routes(app: Bottle) -> None:
                     console.log('[SearchUI] Downloadantwort', data);
                     const messages = data.results.map(entry => {
                         if (entry.captcha_required) {
-                            return 'âš ï¸ ' + String(entry.title || '') + ': CAPTCHA erforderlich.';
+                            return '⚠️ ' + String(entry.title || '') + ': CAPTCHA erforderlich.';
                         }
                         if (entry.success) {
-                            return 'âœ… ' + String(entry.title || '') + ': Gestartet.';
+                            return '✅ ' + String(entry.title || '') + ': Gestartet.';
                         }
-                        return 'âŒ ' + String(entry.title || '') + ': Fehlgeschlagen.';
+                        return '❌ ' + String(entry.title || '') + ': Fehlgeschlagen.';
                     });
                     setMessage(dom.message, messages.join('\\n'));
                     await loadStatus();
@@ -687,7 +687,7 @@ def setup_search_routes(app: Bottle) -> None:
 
             async function loadStatus() {
                 setMessage(dom.statusMessage, 'Lade Status...');
-                console.log('[SearchUI] loadStatus ausgelÃ¶st');
+                console.log('[SearchUI] loadStatus ausgelöst');
                 try {
                     const res = await fetch('/api/search/status');
                     if (!res.ok) {
@@ -697,17 +697,17 @@ def setup_search_routes(app: Bottle) -> None:
                     console.log('[SearchUI] Statusantwort', data);
 
                     renderStatusList(dom.statusQueue, data.queue, item => {
-                        const progress = typeof item.progress === 'number' ? String(item.progress) + '%' : 'â€“';
+                        const progress = typeof item.progress === 'number' ? String(item.progress) + '%' : '–';
                         const name = document.createElement('strong');
                         name.textContent = String(item.name || 'Unbekannt');
                         const progressDiv = document.createElement('div');
                         progressDiv.className = 'status-progress';
-                        progressDiv.textContent = String(item.status || '') + ' â€¢ ' + progress + ' â€¢ ' + String(item.timeleft || '');
+                        progressDiv.textContent = String(item.status || '') + ' • ' + progress + ' • ' + String(item.timeleft || '');
                         return { name, progressDiv };
                     });
 
                     renderStatusList(dom.statusHistory, data.history, item => {
-                        const suffix = item.fail_message ? 'âš ï¸ ' + String(item.fail_message) : 'âœ… Fertig';
+                        const suffix = item.fail_message ? '⚠️ ' + String(item.fail_message) : '✅ Fertig';
                         const name = document.createElement('strong');
                         name.textContent = String(item.name || 'Unbekannt');
                         const progressDiv = document.createElement('div');
@@ -726,7 +726,7 @@ def setup_search_routes(app: Bottle) -> None:
                     });
 
                     if (data.captcha && data.captcha.length) {
-                        setMessage(dom.statusMessage, 'Es warten ' + data.captcha.length + ' Pakete auf die CAPTCHA-LÃ¶sung.');
+                        setMessage(dom.statusMessage, 'Es warten ' + data.captcha.length + ' Pakete auf die CAPTCHA-Lösung.');
                     } else {
                         setMessage(dom.statusMessage, 'Status aktualisiert.');
                     }

@@ -263,7 +263,7 @@ def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, s
     - Hide.cx links -> decrypt via API (no CAPTCHA needed) -> send to JDownloader
     - Filecrypt links -> queue for CAPTCHA solving
     """
-    result = get_dl_download_links(shared_state, url, mirror, title)
+    result = get_dl_download_links(shared_state, url, mirror, title, password)
     
     if not result:
         fail(title, package_id, shared_state,
