@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.5] - 2026-01-07
+
+### Added
+- **Upstream Sync**: Integrated JS-based hostname extraction using `dukpy`. This allows fetching hostnames from dynamic pages (e.g., `/ini.html`).
+- **Debugging**: Enhanced WebUI authentication logging to help diagnose 401/500 errors.
+
+### Improved
+- **Upstream Sync**: The Arr indexer now returns a "No results found" item for feed requests if no results are found, improving compatibility with Sonarr/Radarr.
+
+### Fixed
+- **WebUI Auth**: Resolved a critical bug where Basic Auth would result in a 401 Unauthorized (missing header) or 500 Internal Server Error (framework incompatibility) on some platforms.
+
+---
+
 ## [1.10.4] - 2026-01-06
 
 ### Improved

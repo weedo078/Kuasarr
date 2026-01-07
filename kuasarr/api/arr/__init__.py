@@ -367,6 +367,18 @@ def setup_arr_routes(app):
                             <enclosure url="{release.get("link", "")}" length="{release.get("size", 0)}" type="application/x-nzb" />
                         </item>'''
 
+                    is_feed_request = not getattr(request.query, 'imdbid', '')
+                    if is_feed_request and not items:
+                        items = f'''
+                        <item>
+                            <title>No results found</title>
+                            <guid isPermaLink="True">https://kuasarr.indexer/</guid>
+                            <link>https://kuasarr.indexer/</link>
+                            <comments>Kuasarr Indexer Feed</comments>
+                            <pubDate>{datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0000")}</pubDate>
+                            <description>No results found for this feed request</description>
+                        </item>'''
+
                     return f'''<?xml version="1.0" encoding="UTF-8"?>
                                 <rss>
                                     <channel>

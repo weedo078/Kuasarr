@@ -16,6 +16,7 @@ from kuasarr.api.hosters import setup_hosters_routes
 from kuasarr.api.dbc import setup_dbc_routes
 from kuasarr.api.statistics import setup_statistics
 from kuasarr.providers import shared_state
+from kuasarr.providers.log import debug
 from kuasarr.providers.ui.html_templates import render_button, render_centered_html
 from kuasarr.providers.web_server import Server
 from kuasarr.storage.config import Config
@@ -32,6 +33,11 @@ def get_api(shared_state_dict, shared_state_lock):
     WEBUI_PASS = os.environ.get("KUASARR_WEBUI_PASS", "").strip() or ini_webui.get("password") or ""
     WEBUI_AUTH_ENABLED = bool(WEBUI_USER and WEBUI_PASS)
 
+    if WEBUI_AUTH_ENABLED:
+        debug(f"WebUI Auth is ENABLED (User: {WEBUI_USER})")
+    else:
+        debug("WebUI Auth is DISABLED (User/Pass not set in Config or ENV)")
+
     # API paths that should NEVER require BasicAuth (Radarr/Sonarr/machine-to-machine)
     API_BYPASS_PREFIXES = (
         "/api",
@@ -47,6 +53,8 @@ def get_api(shared_state_dict, shared_state_lock):
         try:
             encoded = auth_header[6:]
             decoded = base64.b64decode(encoded).decode("utf-8")
+            if ":" not in decoded:
+                return False
             username, password = decoded.split(":", 1)
             return username == WEBUI_USER and password == WEBUI_PASS
         except Exception:
@@ -67,9 +75,10 @@ def get_api(shared_state_dict, shared_state_lock):
 
         # All other routes require BasicAuth
         if not _check_basic_auth():
+            debug(f"WebUI Auth failed for path: {path} (Header present: {bool(request.headers.get('Authorization'))})")
             response.status = 401
             response.set_header("WWW-Authenticate", 'Basic realm="Kuasarr WebUI"')
-            abort(401, "Unauthorized")
+            return "401 Unauthorized"
 
     setup_arr_routes(app)
     setup_captcha_routes(app)
