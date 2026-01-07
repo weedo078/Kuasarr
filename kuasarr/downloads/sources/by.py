@@ -101,14 +101,14 @@ def get_by_download_links(shared_state, url, mirror, title):  # signature must a
             # Check if it's a hide.cx link - decrypt directly without CAPTCHA
             if "hide.cx" in resolved_url:
                 info(f"Found hide.cx link, decrypting directly: {resolved_url}")
-                hide_links = unhide_links(shared_state, resolved_url)
+                hide_links, error = unhide_links(shared_state, resolved_url)
                 if hide_links:
                     info(f"Decrypted {len(hide_links)} links from hide.cx")
                     # Return directly as unprotected links (list of URLs)
                     for hide_link in hide_links:
                         links.append(hide_link)
                 else:
-                    info(f"Failed to decrypt hide.cx link: {resolved_url}")
+                    info(f"Failed to decrypt hide.cx link: {resolved_url} - {error or 'unknown error'}")
                 continue
 
             # For other hosters (filecrypt needs CAPTCHA)

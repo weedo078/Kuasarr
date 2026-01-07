@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.11.4] - 2026-01-07
+
+### Fixed
+- **hide.cx**: Offline containers/links are now marked as permanently failed - no more useless retries
+
+---
+
+## [1.11.2-3] - 2026-01-07
+
+### Fixed
+- **hide.cx**: Legacy `/fc/Container/` URLs now resolved via API endpoint `/fc/Container/{id}` 
+
+---
+
+## [1.11.1] - 2026-01-07
+
+### Fixed
+- **Hotfix**: Fixed circular import error in `hide.py` that prevented application startup
+
+---
+
+## [1.11.0] - 2026-01-07
+
+### Added
+- **hide.cx API Integration**: Native support for hide.cx link decryption via official API (no CAPTCHA required)
+- **New Config Section**: `HideCX` with `api_key` setting for hide.cx API authentication
+- **Automatic Detection**: hide.cx links are now automatically detected and decrypted without manual intervention
+
+### Changed
+- **hide.cx**: Requires free API key from hide.cx (Settings → Account → Application API Keys)
+- **Improved Error Handling**: Better error messages when API key is missing or invalid
+- **Password Support**: hide.cx containers with password protection are now supported
+
+### Fixed
+- **WebUI**: Fixed `TypeError: unhashable type: 'dict'` in CAPTCHA routes caused by double curly braces
+- **Provider Routes**: Corrected `render_button` calls in junkies, keeplinks, and tolink routes
+
+---
+
+## [1.10.9] - 2026-01-07
+
+### Fixed
+- **WebUI**: Final fix for `Config.get()` returning `False` for empty strings, ensuring robust default value handling.
+- **Improved**: Added extra safety checks for hostname extraction in Junkies links.
+
+---
+
+## [1.10.8] - 2026-01-07
+
+### Fixed
+- **WebUI**: Resolved a `TypeError` in `Config.get()` that caused 500 Internal Server Errors when accessing certain pages (e.g., `/captcha`).
+- **Configuration**: Standardized `Config.get()` to support optional default values, matching standard Python dictionary behavior.
+
+---
+
 ## [1.10.7] - 2026-01-07
 
 ### Added

@@ -16,6 +16,8 @@ from kuasarr.providers.obfuscated import (
 
 from .helpers import js_single_quoted_string_safe, check_package_exists, decode_payload
 from .ui_components import render_bypass_section
+from kuasarr.downloads.linkcrypters.hide import unhide_links
+from kuasarr.providers.log import info
 
 
 def setup_provider_routes(app):
@@ -47,10 +49,10 @@ def setup_provider_routes(app):
         <p><b>Package:</b> {title}</p>
         {render_bypass_section(first_url, package_id, title, password)}
         <p>
-            {render_button("Delete Package", "secondary", {{"onclick": f"location.href='/captcha/delete/{package_id}'"}})}
+            {render_button("Delete Package", "secondary", {"onclick": f"location.href='/captcha/delete/{package_id}'"})}
         </p>
         <p>
-            {render_button("Back", "secondary", {{"onclick": "location.href='/'"}})}
+            {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
         </p>
         </body>
         </html>""")
@@ -81,10 +83,10 @@ def setup_provider_routes(app):
         <p><b>Package:</b> {title}</p>
         {render_bypass_section(first_url, package_id, title, password, provider_name="KeepLinks", storage_key="hideSetupInstructionsKeeplinks", userscript_url="/captcha/keeplinks.user.js")}
         <p>
-            {render_button("Delete Package", "secondary", {{"onclick": f"location.href='/captcha/delete/{package_id}'"}})}
+            {render_button("Delete Package", "secondary", {"onclick": f"location.href='/captcha/delete/{package_id}'"})}
         </p>
         <p>
-            {render_button("Back", "secondary", {{"onclick": "location.href='/'"}})}
+            {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
         </p>
         </body>
         </html>""")
@@ -115,13 +117,117 @@ def setup_provider_routes(app):
         <p><b>Package:</b> {title}</p>
         {render_bypass_section(first_url, package_id, title, password, provider_name="ToLink", storage_key="hideSetupInstructionsTolink", userscript_url="/captcha/tolink.user.js")}
         <p>
-            {render_button("Delete Package", "secondary", {{"onclick": f"location.href='/captcha/delete/{package_id}'"}})}
+            {render_button("Delete Package", "secondary", {"onclick": f"location.href='/captcha/delete/{package_id}'"})}
         </p>
         <p>
-            {render_button("Back", "secondary", {{"onclick": "location.href='/'"}})}
+            {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
         </p>
         </body>
         </html>""")
+
+    @app.get("/captcha/hide")
+    def serve_hide_captcha():
+        """Handle hide.cx links - decrypt via API (no CAPTCHA needed)."""
+        from kuasarr.downloads.linkcrypters.hide import get_hide_api_key
+        
+        payload = decode_payload()
+
+        if "error" in payload:
+            return render_fail(payload["error"])
+
+        package_id = payload.get("package_id")
+        check_package_exists(package_id)
+        title = payload.get("title")
+        password = payload.get("password")
+        urls = payload.get("links") or []
+
+        if not urls:
+            return render_fail(f"No download links available for package: {title}")
+
+        api_key = get_hide_api_key(shared_state)
+        if not api_key:
+            return render_centered_html(f"""
+            <!DOCTYPE html>
+            <html>
+            <body>
+            <h1><img src="{images.logo}" type="image/png" alt="Kuasarr logo" class="logo"/>Kuasarr</h1>
+            <p><b>Package:</b> {title}</p>
+            <div class="info-box" style="background: #fff3cd; border: 1px solid #ffc107; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                <h3 style="color: #856404; margin-top: 0;">⚠️ hide.cx API Key erforderlich</h3>
+                <p style="color: #856404; margin-bottom: 0.5rem;">
+                    Um hide.cx Links zu entschlüsseln, wird ein API Key benötigt.
+                </p>
+                <p style="color: #856404; margin-bottom: 0.5rem;">
+                    <b>So erhältst du einen kostenlosen API Key:</b>
+                </p>
+                <ol style="color: #856404; margin-bottom: 0.5rem; padding-left: 1.5rem;">
+                    <li>Erstelle einen kostenlosen Account auf <a href="https://hide.cx" target="_blank">hide.cx</a></li>
+                    <li>Gehe zu Settings → Account → Application API Keys</li>
+                    <li>Erstelle einen neuen API Key</li>
+                    <li>Trage den Key in Kuasarr unter Settings → HideCX → api_key ein</li>
+                </ol>
+            </div>
+            <p>
+                {render_button("Zu den Settings", "primary", {"onclick": "location.href='/settings'"})}
+            </p>
+            <p>
+                {render_button("Delete Package", "secondary", {"onclick": f"location.href='/captcha/delete/{package_id}'"})}
+            </p>
+            <p>
+                {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
+            </p>
+            </body>
+            </html>""")
+
+        first_url = urls[0][0] if isinstance(urls[0], (list, tuple)) else urls[0]
+        
+        info(f"Decrypting hide.cx link via API: {first_url}")
+        decrypted_links, error = unhide_links(shared_state, first_url, password)
+        
+        if decrypted_links:
+            info(f"Successfully decrypted {len(decrypted_links)} links from hide.cx")
+            added = shared_state.download_package(
+                decrypted_links,
+                title,
+                password
+            )
+            
+            if added:
+                shared_state.get_db("protected").delete(package_id)
+                
+                remaining_protected = shared_state.get_db("protected").retrieve_all_titles()
+                has_more_captchas = bool(remaining_protected)
+                
+                if has_more_captchas:
+                    solve_button = render_button("Solve another CAPTCHA", "primary", {"onclick": "location.href='/captcha'"})
+                else:
+                    solve_button = "<b>No more CAPTCHAs</b>"
+                
+                return render_success(
+                    f"Successfully decrypted {len(decrypted_links)} links from hide.cx!",
+                    timeout=0,
+                    optional_text=f"<p>{solve_button}</p>"
+                )
+            else:
+                return render_fail(f"Failed to add decrypted links to JDownloader for: {title}")
+        else:
+            error_msg = error or "Failed to decrypt hide.cx link. The link may be expired or invalid."
+            info(f"Failed to decrypt hide.cx link: {first_url} - {error_msg}")
+            return render_centered_html(f"""
+            <!DOCTYPE html>
+            <html>
+            <body>
+            <h1><img src="{images.logo}" type="image/png" alt="Kuasarr logo" class="logo"/>Kuasarr</h1>
+            <p><b>Package:</b> {title}</p>
+            <p><b>Error:</b> {error_msg}</p>
+            <p>
+                {render_button("Delete Package", "secondary", {"onclick": f"location.href='/captcha/delete/{package_id}'"})}
+            </p>
+            <p>
+                {render_button("Back", "secondary", {"onclick": "location.href='/'"})}
+            </p>
+            </body>
+            </html>""")
 
     @app.get('/captcha/kuasarr.user.js')
     def serve_kuasarr_user_js():

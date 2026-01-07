@@ -42,10 +42,16 @@ from kuasarr.providers.notifications import send_discord_message
 from kuasarr.providers.statistics import StatsHelper
 from kuasarr.downloads import fail
 from kuasarr.downloads.linkcrypters.filecrypt import CNL, DLC
+from kuasarr.downloads.linkcrypters.hide import unhide_links
 
 DEFAULT_DISPATCH_INTERVAL_SECONDS = 10
 ACTIVE_JOB_STATUSES = {"pending", "processing"}
 MAX_BACKOFF_MULTIPLIER = 8
+
+
+class PermanentLinkFailure(Exception):
+    """Raised when a link permanently fails (e.g., offline) and should not be retried."""
+    pass
 
 
 class DBCDispatcher:
@@ -311,6 +317,10 @@ class DBCDispatcher:
                         
             except (DBCInsufficientCredits, CaptchaInsufficientCredits):
                 raise
+            except PermanentLinkFailure as exc:
+                info(f"Permanent failure for {link_url}: {exc}")
+                self._mark_as_failed(package_id, title, str(exc))
+                return False
             except (DBCError, CaptchaClientError) as exc:
                 info(f"Captcha error for link {link_url}: {exc}")
                 continue
@@ -338,7 +348,9 @@ class DBCDispatcher:
         """Solve captcha for a link using the appropriate method."""
         info(f"Processing link: {link_url[:80]}... (Mirror: {mirror})")
         
-        if "filecrypt" in link_url.lower() or "filecrypt" in mirror.lower():
+        if "hide.cx" in link_url.lower():
+            return self._solve_hide_cx(title, link_url, password, mirror)
+        elif "filecrypt" in link_url.lower() or "filecrypt" in mirror.lower():
             return self._solve_filecrypt_with_dbc(title, link_url, password, mirror)
         elif "keeplinks" in link_url.lower() or "keeplinks" in mirror.lower():
             return self._solve_keeplinks_with_dbc(title, link_url, password, mirror)
@@ -1180,6 +1192,44 @@ class DBCDispatcher:
         
         return links
 
+    def _solve_hide_cx(
+        self,
+        title: str,
+        url: str,
+        password: str,
+        mirror: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Solve hide.cx links via API (no CAPTCHA needed)."""
+        from kuasarr.downloads.linkcrypters.hide import get_hide_api_key
+        
+        api_key = get_hide_api_key(self.shared_state)
+        if not api_key:
+            info("hide.cx API Key not configured - skipping")
+            return None
+        
+        info(f"Decrypting hide.cx link via API: {url}")
+        
+        links, error = unhide_links(self.shared_state, url, password)
+        
+        if error:
+            if error.startswith("PERMANENT:"):
+                error_msg = error[10:]  # Remove "PERMANENT:" prefix
+                info(f"Permanent failure for hide.cx link: {url} - {error_msg}")
+                raise PermanentLinkFailure(error_msg)
+            info(f"Failed to decrypt hide.cx link: {url} - {error}")
+            return None
+        
+        if not links:
+            info(f"No links found in hide.cx container: {url}")
+            return None
+        
+        info(f"Successfully decrypted {len(links)} links from hide.cx")
+        return {
+            "links": links,
+            "source": "hide.cx",
+            "mirror": mirror,
+        }
+
     def _solve_generic_link(
         self,
         title: str,
@@ -1188,7 +1238,7 @@ class DBCDispatcher:
     ) -> Optional[Dict[str, Any]]:
         """Generic link solving for non-Filecrypt links."""
         # For now, just return None - can be extended for other crypters
-        debug(f"Generic link type not supported: {url}")
+        info(f"Generic link type not supported: {url}")
         return None
 
     def _extract_misery_key(self, api_key: str, html: str) -> str:

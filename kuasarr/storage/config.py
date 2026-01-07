@@ -101,6 +101,9 @@ class Config(object):
         'BlockedHosters': [
             ("hosters", "secret", "")  # Komma-separierte Liste von Hoster-IDs (verschlüsselt)
         ],
+        'HideCX': [
+            ("api_key", "secret", "")  # hide.cx API Key (kostenlos unter Settings > Account > Application API Keys)
+        ],
         'Connection': [
             ("internal_address", "str", ""),
             ("external_address", "str", "")
