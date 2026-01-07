@@ -14,28 +14,19 @@ description: How to update the Kuasarr Python app (systemd user service)
    systemctl --user stop kuasarr.service
    ```
 
-2. **Update code / place new wheel**
-   - Pull latest code (git) or copy new wheel into the project.
-
-3. **Download latest wheel from GitHub Releases** (example)
+2. **Update Kuasarr via pip**
    ```bash
-   # adjust version/tag/file as needed
-   curl -L -o /tmp/kuasarr-latest.whl "https://github.com/weedo078/kuasarr/releases/latest/download/kuasarr-1.8.2-py311-none-any.whl"
+   # Use the venv pip to pull the latest version from PyPI:
+   ~/apps/kuasarr/.venv-kuasarr/bin/pip install --upgrade kuasarr
    ```
 
-4. **Reinstall wheel** (in venv)
-   ```bash
-   # Use the venv pip, not pyenv global:
-   ~/.venv-kuasarr/bin/pip install --force-reinstall /tmp/kuasarr-latest.whl
-   ```
-
-5. **Start service**
+3. **Start service**
    ```bash
    systemctl --user daemon-reload
    systemctl --user start kuasarr.service
    ```
 
-6. **Check status/logs**
+4. **Check status/logs**
    ```bash
    systemctl --user status kuasarr.service
    journalctl --user -u kuasarr.service -f

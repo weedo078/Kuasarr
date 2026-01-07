@@ -1,0 +1,73 @@
+Metadata-Version: 2.4
+Name: kuasarr
+Version: 1.10.7
+Summary: kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs, using an additional CaptchaSolverr.
+Home-page: https://github.com/rix1337/Kuasarr
+Author: weedo078
+Author-email: weedo0780@protonmail.com
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: beautifulsoup4>=4.14.2
+Requires-Dist: bottle>=0.13.4
+Requires-Dist: deathbycaptcha-official>=4.6.0
+Requires-Dist: dukpy>=0.5.0
+Requires-Dist: pillow>=12.0.0
+Requires-Dist: pycryptodomex>=3.23.0
+Requires-Dist: requests>=2.32.5
+Requires-Dist: urllib3>=2.6.0
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
+
+# Kuasarr
+
+Kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs.
+
+### Features
+- **Quasarr Fork**: Enhanced with additional hosters and an open download API.
+- **Captcha Integration**: Automatic solving via DeathByCaptcha or 2Captcha.
+- **Hoster Filtering**: Exclude unwanted mirrors directly via the Web UI.
+- **PWA Support**: Installable as a standalone app on desktop and mobile.
+
+## Installation
+
+You can install Kuasarr via pip:
+
+```bash
+pip install kuasarr
+```
+
+## Quick Start
+
+After installation, you can start Kuasarr using the command line:
+
+```bash
+kuasarr
+```
+
+By default, Kuasarr will listen on port `9999`. You can specify a different port:
+
+```bash
+kuasarr --port 8080
+```
+
+### Configuration
+
+All configuration (Hostnames, FlareSolverr, API keys) can be managed via the Web UI or directly in the `kuasarr.ini` file located in your configuration directory.
+
+## Links
+- **GitHub**: [https://github.com/weedo078/Kuasarr](https://github.com/weedo078/Kuasarr)
+- **Support**: [Matrix Chat](https://matrix.to/#/@kuasarr-support:envs.net)
+
+## License
+MIT

@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.7] - 2026-01-07
+
+### Added
+- **Central Settings WebUI**: Introduced a new "Global Settings" tab to manage all configuration options (JDownloader, Notifications, Sonarr/Radarr, etc.) during runtime.
+- **Telegram Notifications**: Added support for Telegram bot notifications alongside Discord.
+- **WebUI Captcha Setup**: Integrated a full Captcha configuration wizard (DBC & 2Captcha) into the initial setup flow.
+- **Dashboard Quick Link**: Added "Captcha Settings" and "Global Settings" buttons to the main dashboard.
+
+### Improved
+- **Notifications**: Discord and Telegram can now be configured directly via the WebUI.
+- **Setup UI**: Enhanced the Captcha configuration form with dynamic JavaScript toggles.
+
+---
+
+## [1.10.6] - 2026-01-07
+
+### Added
+- **PyPI Optimization**: Created a dedicated `README_PYPI.md` focusing on `pip` installation, removing Docker-specific instructions for better clarity on PyPI.
+
+### Improved
+- **Packaging**: Updated `setup.py` and `MANIFEST.in` for more robust builds and correct metadata on PyPI.
+
+---
+
 ## [1.10.5] - 2026-01-07
 
 ### Added

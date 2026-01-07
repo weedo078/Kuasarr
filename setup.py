@@ -17,15 +17,21 @@ def read_version():
     return version
 
 try:
-    with open('README.md', encoding='utf-8') as f:
+    with open('README_PYPI.md', encoding='utf-8') as f:
         long_description = f.read()
 except:
     import io
+    if Path('README_PYPI.md').exists():
+        long_description = io.open('README_PYPI.md', encoding='utf-8').read()
+    else:
+        long_description = "Kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian."
 
-    long_description = io.open('README.md', encoding='utf-8').read()
+def read_requirements():
+    requirements_path = Path(__file__).resolve().parent / "requirements.txt"
+    if requirements_path.exists():
+        return requirements_path.read_text(encoding="utf-8").splitlines()
+    return []
 
-with open('requirements.txt') as f:
-    required = f.read().splitlines()
 
 setuptools.setup(
     name="kuasarr",
@@ -48,7 +54,7 @@ setuptools.setup(
             "version.json",
         ]
     },
-    install_requires=required,
+    install_requires=read_requirements(),
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",

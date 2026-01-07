@@ -46,7 +46,9 @@ class Config(object):
             ("sf", "secret", ""),
             ("sl", "secret", ""),
             ("wd", "secret", ""),
-            ("wx", "secret", "")
+            ("wx", "secret", ""),
+            ("sj", "secret", ""),
+            ("dj", "secret", "")
         ],
         'FlareSolverr': [
             ("url", "str", ""),
@@ -86,6 +88,11 @@ class Config(object):
         'Radarr': [
             ("url", "str", ""),
             ("api_key", "secret", "")
+        ],
+        'Notifications': [
+            ("discord_webhook", "secret", ""),
+            ("telegram_token", "secret", ""),
+            ("telegram_chat_id", "str", ""),
         ],
         'PostProcessing': [
             ("flatten_nested_folders", "bool", "true"),
@@ -211,8 +218,11 @@ class Config(object):
         self._set_to_config(self._section, key, value)
         return
 
-    def get(self, key):
-        return self._get_from_config(self.__config__, key)
+    def get(self, key, default=None):
+        res = self._get_from_config(self.__config__, key)
+        if res is False and default is not None:
+            return default
+        return res
 
 
 def get_clean_hostnames(shared_state):

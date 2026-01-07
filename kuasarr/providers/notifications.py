@@ -19,19 +19,49 @@ if os.getenv('SILENT'):
     silent = True
 
 
+def send_telegram_message(shared_state, title, description):
+    """
+    Sends a Telegram message to the bot provided in the config.
+    """
+    from kuasarr.storage.config import Config
+    
+    token = Config('Notifications').get('telegram_token')
+    chat_id = Config('Notifications').get('telegram_chat_id')
+    
+    if not token or not chat_id:
+        return False
+        
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    text = f"<b>{title}</b>\n\n{description}"
+    
+    data = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+    
+    try:
+        response = requests.post(url, data=data, timeout=10)
+        if response.status_code != 200:
+            info(f"Failed to send message to Telegram. Status code: {response.status_code}")
+            return False
+        return True
+    except Exception as e:
+        info(f"Error sending Telegram message: {e}")
+        return False
+
+
 def send_discord_message(shared_state, title, case, imdb_id=None, details=None, source=None):
     """
-    Sends a Discord message to the webhook provided in the shared state, based on the specified case.
-
-    :param shared_state: Shared state object containing configuration.
-    :param title: Title of the embed to be sent.
-    :param case: A string representing the scenario (e.g., 'captcha', 'failed', 'unprotected').
-    :param imdb_id: A string starting with "tt" followed by at least 7 digits, representing an object on IMDb
-    :param details: A dictionary containing additional details, such as version and link for updates.
-    :param source: Optional source of the notification, sent as a field in the embed.
-    :return: True if the message was sent successfully, False otherwise.
+    Sends a Discord message to the webhook provided in the shared state or config, based on the specified case.
     """
-    if not shared_state.values.get("discord"):
+    from kuasarr.storage.config import Config
+    
+    discord_url = shared_state.values.get("discord")
+    if not discord_url:
+        discord_url = Config('Notifications').get('discord_webhook')
+        
+    if not discord_url:
         return False
 
     poster_object = None
@@ -111,11 +141,13 @@ def send_discord_message(shared_state, title, case, imdb_id=None, details=None, 
             'url': "https://raw.githubusercontent.com/rix1337/kuasarr/main/kuasarr.png"
         }
 
-    # Apply silent mode: suppress notifications for all cases except 'deleted'
     if silent and case not in ["failed", "kuasarr_update"]:
         data['flags'] = SUPPRESS_NOTIFICATIONS
 
-    response = requests.post(shared_state.values["discord"], data=json.dumps(data),
+    # Send to Telegram as well if configured
+    send_telegram_message(shared_state, title, description)
+
+    response = requests.post(discord_url, data=json.dumps(data),
                              headers={"Content-Type": "application/json"})
     if response.status_code != 204:
         info(f"Failed to send message to Discord webhook. Status code: {response.status_code}")

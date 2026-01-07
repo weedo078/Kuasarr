@@ -141,20 +141,8 @@ def run():
         captcha_service = (captcha_config.get('service') or 'dbc').lower().strip()
         shared_state.update("captcha_service", captcha_service)
 
-        print("\n===== Recommended Services =====")
-        print('For convenient universal premium downloads use: "http://real-debrid.com/?id=13910652"')
-        if captcha_service == '2captcha':
-            print('Automated CAPTCHA solutions via 2Captcha (50% cheaper). Get yours here: https://2captcha.com/?from=26376359')
-        else:
-            print('Automated CAPTCHA solutions via DBC. Get yours here: https://deathbycaptcha.com?refid=1237432788a')
-        
-        # DBC Credentials: Config > ENV
-        dbc_username_config = captcha_config.get('dbc_username') or ""
-        dbc_password_config = captcha_config.get('dbc_password') or ""
+        # DBC Credentials: Config > ENV (Token only)
         dbc_authtoken_config = captcha_config.get('dbc_authtoken') or ""
-        
-        dbc_username = os.getenv("DBC_USERNAME", dbc_username_config).strip()
-        dbc_password = os.getenv("DBC_PASSWORD", dbc_password_config).strip()
         dbc_authtoken = os.getenv("DBC_AUTHTOKEN", dbc_authtoken_config).strip()
         
         # 2Captcha API Key
@@ -168,10 +156,10 @@ def run():
         captcha_retry_backoff = _to_positive_int(os.getenv("CAPTCHA_RETRY_BACKOFF", captcha_config.get('retry_backoff')), 5)
         dbc_max_concurrent = _to_positive_int(os.getenv("DBC_MAX_CONCURRENT", "1"), 1)
         
-        # Store DBC config in shared state (for backwards compatibility)
+        # Store DBC config in shared state (Token based only)
         dbc_config_dict = {
-            "username": dbc_username,
-            "password": dbc_password,
+            "username": "",
+            "password": "",
             "authtoken": dbc_authtoken,
             "timeout": captcha_timeout,
             "max_retries": captcha_max_retries,
@@ -185,16 +173,36 @@ def run():
         if captcha_service == '2captcha':
             dbc_enabled = bool(twocaptcha_api_key)
         else:
-            dbc_enabled = bool(dbc_authtoken or (dbc_username and dbc_password))
+            dbc_enabled = bool(dbc_authtoken)
         shared_state.update("dbc_enabled", dbc_enabled)
         
         if dbc_enabled:
             if captcha_service == '2captcha':
-                print(f"Captcha: 2Captcha configured (Timeout={captcha_timeout}s, Max-Retries={captcha_max_retries})")
+                info(f"Captcha: 2Captcha configured (Timeout={captcha_timeout}s, Max-Retries={captcha_max_retries})")
             else:
-                print(f"Captcha: DBC configured (Timeout={captcha_timeout}s, Max-Retries={captcha_max_retries})")
+                info(f"Captcha: DBC configured (Timeout={captcha_timeout}s, Max-Retries={captcha_max_retries})")
         else:
-            print("Captcha: Not configured (no credentials found)")
+            info("Captcha: Not configured (no credentials found)")
+            dbc_credentials_config(shared_state)
+            
+            # Re-read config after setup
+            captcha_config = Config('Captcha')
+            captcha_service = (captcha_config.get('service') or 'dbc').lower().strip()
+            dbc_authtoken = captcha_config.get('dbc_authtoken') or ""
+            twocaptcha_api_key = captcha_config.get('twocaptcha_api_key') or ""
+            
+            if captcha_service == '2captcha':
+                dbc_enabled = bool(twocaptcha_api_key)
+            else:
+                dbc_enabled = bool(dbc_authtoken) # Simplified for token-based auth
+            
+            shared_state.update("captcha_service", captcha_service)
+            shared_state.update("dbc_enabled", dbc_enabled)
+            shared_state.update("twocaptcha_api_key", twocaptcha_api_key)
+            
+            # Update dbc_config_dict for shared_state
+            dbc_config_dict["authtoken"] = dbc_authtoken
+            shared_state.update("dbc_config", dbc_config_dict)
 
         print(f'Config path: "{config_path}"')
 

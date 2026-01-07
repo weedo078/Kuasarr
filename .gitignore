@@ -9,8 +9,7 @@ __pycache__/
 
 # Build Tools
 *venv*/
-docs/
-docs/*
+
 # PyCharm
 .idea
 kuasarr/version.json
@@ -44,10 +43,5 @@ Dockerfile
 helper/
 
 tmp-config/
-release/
-dist/
-build/
-*.spec
-scripts/
 
-kuasarr.egg-info/
+README_PYPI.md

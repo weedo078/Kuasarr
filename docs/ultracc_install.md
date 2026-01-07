@@ -16,15 +16,13 @@ source ~/.profile   # load pyenv shims
 python --version    # should point to ~/.pyenv/shims/python
 ```
 
-## 2) Create venv and install wheel (from GitHub Releases)
+## 2) Create venv and install Kuasarr (via PyPI)
 ```bash
 cd ~/apps/kuasarr
 python -m venv .venv-kuasarr
 source .venv-kuasarr/bin/activate
 pip install --upgrade pip
-# example: latest release wheel (adjust if needed)
-curl -L -o /tmp/kuasarr-latest.whl "https://github.com/weedo078/kuasarr/releases/latest/download/kuasarr-1.8.2-py3-none-any.whl"
-pip install /tmp/kuasarr-latest.whl
+pip install kuasarr
 ```
 
 ## 3) Prepare config path pointer

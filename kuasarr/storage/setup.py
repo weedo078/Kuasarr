@@ -309,30 +309,53 @@ def dbc_credentials_config(shared_state):
     @app.get('/')
     def credentials_form():
         captcha_cfg = Config('Captcha')
+        default_service = (captcha_cfg.get('service') or 'dbc').lower().strip()
         default_authtoken = captcha_cfg.get('dbc_authtoken') or ""
         default_twocaptcha = captcha_cfg.get('twocaptcha_api_key') or ""
+        
         form_html = f'''
-        <p>Choose your captcha service and provide credentials.</p>
-        <form action="/api/dbc_credentials" method="post">
+        <p>Choose your captcha service and provide your API token.</p>
+        <form action="/api/dbc_credentials" method="post" id="captchaForm">
             <label for="service">Captcha Service</label>
-            <select id="service" name="service">
-                <option value="dbc">DeathByCaptcha</option>
-                <option value="2captcha">2Captcha (50% cheaper for CutCaptcha)</option>
-            </select><br>
+            <select id="service" name="service" onchange="toggleFields()">
+                <option value="dbc" {'selected' if default_service == 'dbc' else ''}>DeathByCaptcha</option>
+                <option value="2captcha" {'selected' if default_service == '2captcha' else ''}>2Captcha (50% cheaper for CutCaptcha)</option>
+            </select><br><br>
             
-            <h4>DeathByCaptcha</h4>
-            <label for="authtoken">DBC API Token</label>
-            <input type="text" id="authtoken" name="authtoken" placeholder="your_api_token" value="{default_authtoken}"><br>
+            <div id="dbc_fields" style="display: {'block' if default_service == 'dbc' else 'none'};">
+                <label for="authtoken">DBC API Token</label>
+                <input type="text" id="authtoken" name="authtoken" placeholder="your_api_token" value="{default_authtoken}">
+                <p class="small">Get your token at <a href="https://deathbycaptcha.com" target="_blank">deathbycaptcha.com</a></p>
+            </div>
 
-            <h4>2Captcha</h4>
-            <label for="twocaptcha_api_key">2Captcha API Key</label>
-            <input type="text" id="twocaptcha_api_key" name="twocaptcha_api_key" placeholder="your_2captcha_key" value="{default_twocaptcha}"><br>
+            <div id="twocaptcha_fields" style="display: {'block' if default_service == '2captcha' else 'none'};">
+                <label for="twocaptcha_api_key">2Captcha API Key</label>
+                <input type="text" id="twocaptcha_api_key" name="twocaptcha_api_key" placeholder="your_2captcha_key" value="{default_twocaptcha}">
+                <p class="small">Get your key at <a href="https://2captcha.com" target="_blank">2captcha.com</a></p>
+            </div>
 
+            <br>
             {render_button("Save", "primary", {"type": "submit"})}
             {render_button("Skip", "secondary", {"type": "submit", "name": "skip", "value": "1"})}
         </form>
+
+        <style>
+            .small {{ font-size: 0.85rem; color: #666; margin-top: 0.25rem; }}
+            #captchaForm label {{ display: block; margin-bottom: 0.5rem; font-weight: 600; }}
+            #captchaForm input, #captchaForm select {{ width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ccc; border-radius: 4px; }}
+        </style>
         '''
-        return render_form("Configure Captcha Service", form_html)
+
+        js = '''
+        <script>
+        function toggleFields() {
+            var service = document.getElementById('service').value;
+            document.getElementById('dbc_fields').style.display = (service === 'dbc') ? 'block' : 'none';
+            document.getElementById('twocaptcha_fields').style.display = (service === '2captcha') ? 'block' : 'none';
+        }
+        </script>
+        '''
+        return render_form("Configure Captcha Service", form_html, js)
 
     @app.post('/api/dbc_credentials')
     def set_dbc_credentials():
@@ -357,8 +380,12 @@ def dbc_credentials_config(shared_state):
         kuasarr.providers.web_server.temp_server_success = True
         return render_success("Captcha credentials saved!", 5)
 
-    info(f'Starting DBC credential setup at: "{shared_state.values["internal_address"]}".')
-    info("Please enter your DeathByCaptcha API token or credentials there!")
+    info("starting captcha credential setup...")
+    info(f"at: \"{shared_state.values['internal_address']}\"")
+    info("Please enter your DeathByCaptcha or 2Captcha API token there!")
+    info("Need one? Get yours here:")
+    info("DeathByCaptcha: https://deathbycaptcha.com?refid=1237432788a")
+    info("2Captcha: https://2captcha.com/?from=26376359")
     return Server(app, listen='0.0.0.0', port=shared_state.values['port']).serve_temporarily()
 
 

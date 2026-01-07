@@ -192,6 +192,14 @@ def get_api(shared_state_dict, shared_state_lock):
                     <span class="action-icon">📊</span>
                     <span class="action-text">View Statistics</span>
                 </button>
+                <button class="action-btn" onclick="location.href='/captcha-config'">
+                    <span class="action-icon">🔑</span>
+                    <span class="action-text">Captcha Settings</span>
+                </button>
+                <button class="action-btn" onclick="location.href='/settings'">
+                    <span class="action-icon">⚙️</span>
+                    <span class="action-text">Global Settings</span>
+                </button>
                 <button class="action-btn" onclick="location.href='/captcha'">
                     <span class="action-icon">🔓</span>
                     <span class="action-text">CAPTCHA Queue</span>
