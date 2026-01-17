@@ -54,11 +54,35 @@ def get_keeplinks_links(shared_state, captcha_token, title, url, password=None, 
         # Check if we're on the "Click To Proceed" page
         proceed_form = soup.find('form', {'name': 'frmprotect'})
         if proceed_form:
+            # Check for showpageval or a submit button with "proceed", "klick", "continue" text
+            is_proceed_page = False
             showpageval_input = proceed_form.find('input', {'name': 'showpageval'})
             if showpageval_input and showpageval_input.get('value') == '1':
+                is_proceed_page = True
+            
+            if not is_proceed_page:
+                # Look for submit input or button
+                submit_btn = proceed_form.find(['input', 'button'], {'type': 'submit'}) or proceed_form.find('button')
+                if submit_btn:
+                    btn_text = (submit_btn.get('value') or submit_btn.text or "").lower()
+                    if any(x in btn_text for x in ['proceed', 'klick', 'continue', 'proceed', 'fortfahren']):
+                        is_proceed_page = True
+            
+            if is_proceed_page:
                 # Step 2: POST to proceed past the first page
                 debug("Keeplinks: Submitting 'Click To Proceed' form")
-                post_data = {'showpageval': '1'}
+                post_data = {}
+                for input_elem in proceed_form.find_all('input'):
+                    name = input_elem.get('name')
+                    if name:
+                        post_data[name] = input_elem.get('value', '')
+                
+                # Also check for buttons with names
+                for btn in proceed_form.find_all(['input', 'button'], {'type': 'submit'}):
+                    name = btn.get('name')
+                    if name:
+                        post_data[name] = btn.get('value', '')
+                
                 response = session.post(url, data=post_data, headers=headers, timeout=30)
                 
                 if response.status_code != 200:
@@ -220,10 +244,33 @@ def get_keeplinks_captcha_info(shared_state, url):
         # Check for "Click To Proceed" page
         proceed_form = soup.find('form', {'name': 'frmprotect'})
         if proceed_form:
+            is_proceed_page = False
             showpageval_input = proceed_form.find('input', {'name': 'showpageval'})
             if showpageval_input and showpageval_input.get('value') == '1':
+                is_proceed_page = True
+            
+            if not is_proceed_page:
+                # Look for submit input or button
+                submit_btn = proceed_form.find(['input', 'button'], {'type': 'submit'}) or proceed_form.find('button')
+                if submit_btn:
+                    btn_text = (submit_btn.get('value') or submit_btn.text or "").lower()
+                    if any(x in btn_text for x in ['proceed', 'klick', 'continue', 'proceed', 'fortfahren']):
+                        is_proceed_page = True
+                    
+            if is_proceed_page:
                 # POST to proceed
-                post_data = {'showpageval': '1'}
+                post_data = {}
+                for input_elem in proceed_form.find_all('input'):
+                    name = input_elem.get('name')
+                    if name:
+                        post_data[name] = input_elem.get('value', '')
+                
+                # Also check for buttons with names
+                for btn in proceed_form.find_all(['input', 'button'], {'type': 'submit'}):
+                    name = btn.get('name')
+                    if name:
+                        post_data[name] = btn.get('value', '')
+                        
                 response = session.post(url, data=post_data, headers=headers, timeout=30)
                 if response.status_code != 200:
                     return None

@@ -115,6 +115,28 @@ def keeplinks_quasarr_helper_user_js():
 
     // Wait for page to load and find download links
     function findAndTransferLinks() {
+        // Auto-click "Click To Proceed" if present
+        const proceedForm = document.querySelector('form[name="frmprotect"]');
+        if (proceedForm) {
+            const showpageval = proceedForm.querySelector('input[name="showpageval"]');
+            const submitBtn = proceedForm.querySelector('input[type="submit"], button[type="submit"], button');
+            
+            if (showpageval && showpageval.value === '1') {
+                console.log('Kuasarr: Auto-clicking Proceed button (showpageval)');
+                proceedForm.submit();
+                return false;
+            }
+            
+            if (submitBtn) {
+                const btnText = (submitBtn.value || submitBtn.textContent || "").toLowerCase();
+                if (btnText.includes('proceed') || btnText.includes('klick') || btnText.includes('continue') || btnText.includes('fortfahren')) {
+                    console.log('Kuasarr: Auto-clicking Proceed button (text match)');
+                    submitBtn.click();
+                    return false;
+                }
+            }
+        }
+
         const links = [];
         
         // Find all download links on the page (KeepLinks specific selectors)
