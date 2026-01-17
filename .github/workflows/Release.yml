@@ -144,5 +144,5 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
-          pip install twine
+          pip install 'twine<6'
           twine upload dist/*.whl
