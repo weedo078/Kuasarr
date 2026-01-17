@@ -1,0 +1,33 @@
+name: PR Version Bump Check
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'version.json'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          path: pr
+
+      - name: Compare versions
+        run: |
+          OLD_VERSION=$(jq -r .version main/version.json)
+          NEW_VERSION=$(jq -r .version pr/version.json)
+          echo "Old Version: $OLD_VERSION"
+          echo "New Version: $NEW_VERSION"
+          if [ "$OLD_VERSION" == "$NEW_VERSION" ]; then
+            echo "Version has not been bumped!"
+            exit 1
+          fi
