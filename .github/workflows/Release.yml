@@ -86,6 +86,8 @@ jobs:
         with:
           name: wheel
           path: ./dist
+      - name: Verify wheel exists
+        run: ls -la ./dist/
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
