@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Kuasarr WX Integration
 # Based on PR #159 from rix1337/Quasarr
+# Updated with Auto-Mirror from Quasarr v1.31.0
 
 import re
 
@@ -8,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from ...providers.log import info, debug
+from ...providers.utils import check_links_online_status
 
 hostname = "wx"
 
@@ -42,9 +44,12 @@ def extract_links_from_page(page_html, host):
     return links
 
 
-def get_wx_download_links(shared_state, url, mirror, title):
+def get_wx_download_links(shared_state, url, mirror, title, password=None):
     """
-    Get download links from a WX detail page.
+    WX source handler - Grabs download links from API based on title.
+    Finds the best mirror (M1, M2, M3...) by checking online status.
+    Returns all online links from the first complete mirror, or the best partial mirror.
+    Prefers hide.cx links over other crypters (filecrypt, etc.) when online counts are equal.
 
     Returns:
         dict with 'links', 'password', and 'title'
@@ -52,7 +57,7 @@ def get_wx_download_links(shared_state, url, mirror, title):
     host = shared_state.values["config"]("Hostnames").get(hostname)
     if not host:
         debug(f"WX hostname not configured")
-        return {}
+        return {"links": []}
 
     headers = {
         'User-Agent': shared_state.values.get("user_agent",
@@ -66,88 +71,153 @@ def get_wx_download_links(shared_state, url, mirror, title):
 
         if response.status_code != 200:
             info(f"{hostname.upper()}: Failed to load page: {url} (Status: {response.status_code})")
-            return {}
+            return {"links": []}
 
-        # Extract slug from URL
-        slug_match = re.search(r'/detail/([^/]+)', url)
-        if slug_match:
-            slug = slug_match.group(1)
+        # Extract slug from URL (handle query params)
+        slug_match = re.search(r'/detail/([^/?]+)', url)
+        if not slug_match:
+            info(f"{hostname.upper()}: Could not extract slug from URL: {url}")
+            return {"links": []}
 
-            # Try API (start/d/<slug>) – matches Upstream behaviour
-            api_url = f'https://api.{host}/start/d/{slug}'
-            try:
-                api_headers = {
-                    'User-Agent': shared_state.values["user_agent"],
-                    'Accept': 'application/json'
-                }
-                debug(f"{hostname.upper()}: Fetching API data from: {api_url}")
-                api_response = session.get(api_url, headers=api_headers, timeout=30)
-                if api_response.status_code == 200:
-                    data = api_response.json()
+        slug = slug_match.group(1)
 
-                    if 'item' in data and 'releases' in data['item']:
-                        releases = data['item']['releases']
+        # Try API (start/d/<slug>)
+        api_url = f'https://api.{host}/start/d/{slug}'
+        try:
+            api_headers = {
+                'User-Agent': shared_state.values["user_agent"],
+                'Accept': 'application/json'
+            }
+            debug(f"{hostname.upper()}: Fetching API data from: {api_url}")
+            api_response = session.get(api_url, headers=api_headers, timeout=30)
+            if api_response.status_code != 200:
+                info(f"{hostname.upper()}: API request failed: {api_response.status_code}")
+                return {"links": []}
 
-                        # Find release matching title
-                        matching_release = None
-                        for release in releases:
-                            if release.get('fulltitle') == title:
-                                matching_release = release
-                                break
+            data = api_response.json()
 
-                        if matching_release:
-                            crypted_links = matching_release.get('crypted_links', {}) or {}
-                            links = []
+            if 'item' not in data or 'releases' not in data['item']:
+                info(f"{hostname.upper()}: No releases found in API response")
+                return {"links": []}
 
-                            def _append_if_supported(link, hoster_label):
-                                if re.search(r'hide\.', link, re.IGNORECASE) or re.search(r'filecrypt\.', link, re.IGNORECASE):
-                                    links.append(link)
-                                    debug(f"{hostname.upper()}: Found {hoster_label} link")
-                                else:
-                                    info(f"{hostname.upper()}: Unsupported link from API: {link}")
+            releases = data['item']['releases']
 
-                            if mirror:
-                                matched_hoster = None
-                                for hoster in crypted_links.keys():
-                                    if mirror.lower() in hoster.lower() or hoster.lower() in mirror.lower():
-                                        matched_hoster = hoster
-                                        break
-                                if matched_hoster:
-                                    _append_if_supported(crypted_links.get(matched_hoster, ""), matched_hoster)
-                                else:
-                                    info(f"{hostname.upper()}: Mirror '{mirror}' not found in available hosters: {list(crypted_links.keys())}")
-                            else:
-                                for hoster, link in crypted_links.items():
-                                    _append_if_supported(link, hoster)
+            # Find ALL releases matching the title (these are different mirrors: M1, M2, M3...)
+            matching_releases = [r for r in releases if r.get('fulltitle') == title]
 
-                            if links:
-                                password = f"www.{host}"
-                                return {"links": links, "password": password, "title": title}
-                            else:
-                                info(f"{hostname.upper()}: No supported crypted links found for: {title}")
-                                return {}
-                        else:
-                            info(f"{hostname.upper()}: No release found matching title: {title}")
-                            return {}
-            except Exception as e:
-                debug(f"{hostname.upper()}: API fetch error: {e}")
+            if not matching_releases:
+                info(f"{hostname.upper()}: No release found matching title: {title}")
+                return {"links": []}
+
+            debug(f"{hostname.upper()}: Found {len(matching_releases)} mirror(s) for: {title}")
+
+            # Evaluate each mirror and find the best one
+            # Track: (online_count, is_hide, online_links)
+            best_mirror = None  # (online_count, is_hide, online_links)
+
+            for idx, release in enumerate(matching_releases):
+                crypted_links = release.get('crypted_links', {})
+                check_urls = release.get('options', {}).get('check', {})
+
+                if not crypted_links:
+                    continue
+
+                # Separate hide.cx links from other crypters
+                hide_links = []
+                other_links = []
+
+                for hoster, container_url in crypted_links.items():
+                    state_url = check_urls.get(hoster) if check_urls else None
+                    if re.search(r'hide\.', container_url, re.IGNORECASE):
+                        hide_links.append([container_url, hoster, state_url])
+                    elif re.search(r'filecrypt\.', container_url, re.IGNORECASE):
+                        other_links.append([container_url, hoster, state_url])
+                    # Skip other crypters we don't support
+
+                # Check hide.cx links first (preferred)
+                hide_online = 0
+                online_hide = []
+                if hide_links:
+                    online_hide = check_links_online_status(hide_links, shared_state)
+                    hide_total = len(hide_links)
+                    hide_online = len(online_hide)
+
+                    debug(f"{hostname.upper()}: M{idx + 1} hide.cx: {hide_online}/{hide_total} online")
+
+                    # If all hide.cx links are online, use this mirror immediately
+                    if hide_online == hide_total and hide_online > 0:
+                        debug(
+                            f"{hostname.upper()}: M{idx + 1} is complete (all {hide_online} hide.cx links online), using this mirror")
+                        result_links = [[link[0], link[1]] for link in online_hide]
+                        return {"links": result_links, "password": password or f"www.{host}", "title": title}
+
+                # Check other crypters (filecrypt, etc.)
+                other_online = 0
+                online_other = []
+                if other_links:
+                    online_other = check_links_online_status(other_links, shared_state)
+                    other_total = len(other_links)
+                    other_online = len(online_other)
+
+                    debug(f"{hostname.upper()}: M{idx + 1} other crypters: {other_online}/{other_total} online")
+
+                # Determine best option for this mirror (prefer hide.cx on ties)
+                mirror_links = None
+                mirror_count = 0
+                mirror_is_hide = False
+
+                if hide_online > 0 and hide_online >= other_online:
+                    # hide.cx wins (more links or tie)
+                    mirror_links = online_hide
+                    mirror_count = hide_online
+                    mirror_is_hide = True
+                elif other_online > hide_online:
+                    # other crypter has more online links
+                    mirror_links = online_other
+                    mirror_count = other_online
+                    mirror_is_hide = False
+
+                # Update best_mirror if this mirror is better
+                # Priority: 1) more online links, 2) hide.cx preference on ties
+                if mirror_links:
+                    if best_mirror is None:
+                        best_mirror = (mirror_count, mirror_is_hide, mirror_links)
+                    elif mirror_count > best_mirror[0]:
+                        best_mirror = (mirror_count, mirror_is_hide, mirror_links)
+                    elif mirror_count == best_mirror[0] and mirror_is_hide and not best_mirror[1]:
+                        # Same count but this is hide.cx and current best is not
+                        best_mirror = (mirror_count, mirror_is_hide, mirror_links)
+
+            # No complete mirror found, return best partial mirror
+            if best_mirror and best_mirror[2]:
+                crypter_type = "hide.cx" if best_mirror[1] else "other crypter"
+                debug(
+                    f"{hostname.upper()}: No complete mirror, using best partial with {best_mirror[0]} online {crypter_type} link(s)")
+                result_links = [[link[0], link[1]] for link in best_mirror[2]]
+                return {"links": result_links, "password": password or f"www.{host}", "title": title}
+
+            info(f"{hostname.upper()}: No online links found for: {title}")
+            return {"links": []}
+
+        except Exception as e:
+            debug(f"{hostname.upper()}: API fetch error: {e}")
 
         # Fallback to HTML parsing
         links = extract_links_from_page(response.text, host)
 
         if not links:
             info(f"{hostname.upper()}: No supported download links found in page: {url}")
-            return {}
+            return {"links": []}
 
-        password = f"www.{host}"
+        result_password = password or f"www.{host}"
         debug(f"{hostname.upper()}: Found {len(links)} download link(s) via HTML for: {title}")
 
         return {
-            "links": links,
-            "password": password,
+            "links": [[link, "html"] for link in links],
+            "password": result_password,
             "title": title
         }
 
     except Exception as e:
         info(f"{hostname.upper()}: Error extracting download links from {url}: {e}")
-        return {}
+        return {"links": []}

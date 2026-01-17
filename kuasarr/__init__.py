@@ -2,6 +2,23 @@
 # Kuasarr
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
+import json
+from pathlib import Path
+
+def _read_version():
+    for p in [
+        Path(__file__).parent.parent / "version.json",
+        Path(__file__).parent / "version.json",
+    ]:
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8")).get("version", "0.0.0")
+            except Exception:
+                pass
+    return "0.0.0"
+
+__version__ = _read_version()
+
 import argparse
 import multiprocessing
 import os

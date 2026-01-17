@@ -69,7 +69,7 @@ def render_bypass_section(url, package_id, title, password, provider_name="FileC
             </div>
 
             <p style="text-align: center;">
-                {render_button(f"Open {provider_name} & Get Download Links", "primary", {{"onclick": f"window.open('{url_with_quick_transfer_params}', '_self')"}})}
+                {render_button(f"Open {provider_name} & Get Download Links", "primary", {"onclick": f"window.open('{url_with_quick_transfer_params}', '_self')"})}
             </p>
 
             <!-- Manual submission - collapsible -->

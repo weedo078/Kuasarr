@@ -91,8 +91,6 @@ class DeathByCaptchaClient:
     
     def __init__(
         self,
-        username: str = "",
-        password: str = "",
         authtoken: str = "",
         timeout: int = 120,
         max_retries: int = 3,
@@ -101,15 +99,11 @@ class DeathByCaptchaClient:
         """Initialize the DBC client.
         
         Args:
-            username: DBC account username (use "authtoken" if using token auth)
-            password: DBC account password (or empty if using token)
-            authtoken: DBC authentication token (alternative to username/password)
+            authtoken: DBC authentication token
             timeout: Request timeout in seconds
             max_retries: Maximum number of retries for failed requests
             retry_backoff: Seconds to wait between retries
         """
-        self.username = username
-        self.password = password
         self.authtoken = authtoken
         self.timeout = max(1, int(timeout))
         self.max_retries = max(1, int(max_retries))
@@ -123,9 +117,7 @@ class DeathByCaptchaClient:
     
     def _get_auth_data(self) -> Dict[str, str]:
         """Get authentication data for API requests."""
-        if self.authtoken:
-            return {"authtoken": self.authtoken}
-        return {"username": self.username, "password": self.password}
+        return {"authtoken": self.authtoken}
     
     def _request(
         self,
@@ -541,18 +533,14 @@ class DeathByCaptchaClient:
         
         info(f"Solving CutCaptcha for {page_url} (apikey={api_key})")
         debug(f"DBC: Using official SocketClient, miserykey={misery_key[:10] if misery_key else 'none'}...")
-        debug(f"DBC: Credentials - authtoken={bool(self.authtoken)}, username={bool(self.username)}")
+        debug(f"DBC: Credentials - authtoken={bool(self.authtoken)}")
         
         try:
             # Create official DBC SocketClient (required for type=19)
             # SocketClient signature: SocketClient(username, password, authtoken)
-            # Always pass all 3 arguments - use authtoken if available, otherwise username/password
-            if self.authtoken:
-                debug(f"DBC: Creating SocketClient with authtoken")
-                client = deathbycaptcha.SocketClient("", "", self.authtoken)
-            else:
-                debug(f"DBC: Creating SocketClient with username/password")
-                client = deathbycaptcha.SocketClient(self.username, self.password, None)
+            # Use authtoken exclusively
+            debug(f"DBC: Creating SocketClient with authtoken")
+            client = deathbycaptcha.SocketClient("", "", self.authtoken)
             
             # Log balance
             balance = client.get_balance()
@@ -680,13 +668,9 @@ def create_dbc_client(shared_state) -> Optional[DeathByCaptchaClient]:
         Configured DeathByCaptchaClient or None if not configured
     """
     dbc_config = shared_state.values.get("dbc_config", {})
-    
-    username = dbc_config.get("username", "")
-    password = dbc_config.get("password", "")
     authtoken = dbc_config.get("authtoken", "")
     
-    # Need either authtoken or username+password
-    if not authtoken and not (username and password):
+    if not authtoken:
         return None
     
     timeout = int(dbc_config.get("timeout", 120))
@@ -694,8 +678,6 @@ def create_dbc_client(shared_state) -> Optional[DeathByCaptchaClient]:
     retry_backoff = int(dbc_config.get("retry_backoff", 5))
     
     return DeathByCaptchaClient(
-        username=username,
-        password=password,
         authtoken=authtoken,
         timeout=timeout,
         max_retries=max_retries,

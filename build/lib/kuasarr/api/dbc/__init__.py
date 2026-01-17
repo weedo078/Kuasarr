@@ -248,19 +248,14 @@ def setup_dbc_routes(app):
         """Test DBC credentials by fetching balance."""
         try:
             data = request.json or {}
-            
-            username = data.get("username") or shared_state.values.get("dbc_config", {}).get("username", "")
-            password = data.get("password") or shared_state.values.get("dbc_config", {}).get("password", "")
             authtoken = data.get("authtoken") or shared_state.values.get("dbc_config", {}).get("authtoken", "")
             
-            if not authtoken and not (username and password):
-                return abort(400, "No credentials provided")
+            if not authtoken:
+                return abort(400, "No API token provided")
             
             from kuasarr.providers.captcha.dbc_client import DeathByCaptchaClient
             
             client = DeathByCaptchaClient(
-                username=username,
-                password=password,
                 authtoken=authtoken,
                 timeout=30,
                 max_retries=1,

@@ -50,8 +50,8 @@ def is_junkies_link(link):
     """Check if link is a Junkies link (sj/dj hostnames)."""
     url = link[0] if isinstance(link, (list, tuple)) else link
     mirror = link[1] if isinstance(link, (list, tuple)) and len(link) > 1 else ""
-    sj = shared_state.values["config"]("Hostnames").get("sj", "")
-    dj = shared_state.values["config"]("Hostnames").get("dj", "")
+    sj = shared_state.values["config"]("Hostnames").get("sj") or ""
+    dj = shared_state.values["config"]("Hostnames").get("dj") or ""
     return (mirror == "junkies" or 
             (sj and sj in url) or 
             (dj and dj in url))
@@ -62,6 +62,12 @@ def is_keeplinks_link(link):
     url = link[0] if isinstance(link, (list, tuple)) else link
     mirror = link[1] if isinstance(link, (list, tuple)) and len(link) > 1 else ""
     return "keeplinks" in url.lower() or "keeplinks" in mirror.lower()
+
+
+def is_hide_link(link):
+    """Check if link is a hide.cx link."""
+    url = link[0] if isinstance(link, (list, tuple)) else link
+    return "hide.cx" in url.lower()
 
 
 def is_tolink_link(link):

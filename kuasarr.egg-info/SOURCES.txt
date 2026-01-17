@@ -2,6 +2,7 @@ LICENSE
 MANIFEST.in
 README.md
 README_PYPI.md
+pyproject.toml
 requirements.txt
 setup.py
 version.json
@@ -61,6 +62,7 @@ kuasarr/providers/__init__.py
 kuasarr/providers/common_functions.py
 kuasarr/providers/hosters.py
 kuasarr/providers/imdb_metadata.py
+kuasarr/providers/jd_cache.py
 kuasarr/providers/jdownloader.py
 kuasarr/providers/log.py
 kuasarr/providers/magazine.py

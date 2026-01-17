@@ -6,6 +6,7 @@ import json
 from collections import defaultdict
 from urllib.parse import urlparse
 
+from kuasarr.providers.jd_cache import JDPackageCache
 from kuasarr.providers.log import info, debug
 from kuasarr.providers.myjd_api import TokenExpiredException, RequestTimeoutException, MYJDException
 from kuasarr.providers import shared_state as shared_state_module
@@ -146,8 +147,22 @@ def _trigger_postprocessing(storage_path: str, category: str, package_id: str) -
         _processed_downloads.add(package_id)
 
 
-def get_packages(shared_state):
+def get_packages(shared_state, _cache=None):
+    """
+    Get all packages from protected DB, failed DB, linkgrabber, and downloader.
+
+    Args:
+        shared_state: The shared state object
+        _cache: INTERNAL USE ONLY. Used by delete_package() to share cached data
+                within a single request. External callers should never pass this.
+    """
     packages = []
+
+    # Create cache for this request - only valid for duration of this call
+    if _cache is None:
+        _cache = JDPackageCache(shared_state.get_device())
+
+    cache = _cache  # Use shorter name internally
 
     protected_packages = shared_state.get_db("protected").retrieve_all_titles()
     if protected_packages:
@@ -196,16 +211,14 @@ def get_packages(shared_state):
                 "comment": package_id,
                 "uuid": package_id
             })
-    try:
-        linkgrabber_packages = shared_state.get_device().linkgrabber.query_packages()
-        linkgrabber_links = shared_state.get_device().linkgrabber.query_links()
-    except (TokenExpiredException, RequestTimeoutException, MYJDException):
-        linkgrabber_packages = []
-        linkgrabber_links = []
+    # Use cached queries instead of direct API calls
+    linkgrabber_packages = cache.linkgrabber_packages
+    linkgrabber_links = cache.linkgrabber_links
 
     if linkgrabber_packages:
         for package in linkgrabber_packages:
-            comment = get_links_comment(package, shared_state.get_device().linkgrabber.query_links())
+            # Use cached linkgrabber_links instead of re-querying
+            comment = get_links_comment(package, linkgrabber_links)
             link_details = get_links_status(package, linkgrabber_links)
 
             error = link_details["error"]
@@ -228,24 +241,19 @@ def get_packages(shared_state):
                 "uuid": package.get("uuid"),
                 "error": error
             })
-    try:
-        downloader_packages = shared_state.get_device().downloads.query_packages()
-        downloader_links = shared_state.get_device().downloads.query_links()
-    except (TokenExpiredException, RequestTimeoutException, MYJDException):
-        downloader_packages = []
-        downloader_links = []
+    # Use cached queries instead of direct API calls
+    downloader_packages = cache.downloader_packages
+    downloader_links = cache.downloader_links
+
+    # Get archive package UUIDs using cached method
+    archive_package_uuids = cache.get_archive_package_uuids(downloader_packages, downloader_links)
 
     if downloader_packages and downloader_links:
         for package in downloader_packages:
             comment = get_links_comment(package, downloader_links)
 
-            is_archive = False
-            try:
-                archive_info = shared_state.get_device().extraction.get_archive_info([], [package.get("uuid")])
-                is_archive = True if archive_info and archive_info[0] else False
-            except Exception:
-                # Fehler bei der Archiv-Erkennung ignorieren, damit finale Bytes/ETA-Logik greifen kann
-                pass
+            # Use cached archive detection instead of per-package API call
+            is_archive = package.get("uuid") in archive_package_uuids
 
             link_details = get_links_status(package, downloader_links, is_archive)
 
@@ -440,15 +448,17 @@ def get_packages(shared_state):
         else:
             info(f"Invalid package location {package['location']}")
 
-    if shared_state_module.is_linkgrabber_start_due() and not shared_state.get_device().linkgrabber.is_collecting():
-        linkgrabber_packages = shared_state.get_device().linkgrabber.query_packages()
-        linkgrabber_links = shared_state.get_device().linkgrabber.query_links()
+    if shared_state_module.is_linkgrabber_start_due() and not cache.is_collecting:
+        # Re-use cached data
+        linkgrabber_packages = cache.linkgrabber_packages
+        linkgrabber_links = cache.linkgrabber_links
 
         packages_to_start = []
         links_to_start = []
 
         for package in linkgrabber_packages:
-            comment = get_links_comment(package, shared_state.get_device().linkgrabber.query_links())
+            # Use cached linkgrabber_links
+            comment = get_links_comment(package, linkgrabber_links)
             if comment and comment.startswith("kuasarr_"):
                 package_uuid = package.get("uuid")
                 if package_uuid:

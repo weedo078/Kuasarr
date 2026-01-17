@@ -15,7 +15,7 @@ from kuasarr.downloads.packages import delete_package
 from kuasarr.providers import shared_state
 from kuasarr.providers.ui.html_templates import render_button, render_centered_html, render_fail, render_success
 
-from .helpers import is_junkies_link, is_keeplinks_link, is_tolink_link
+from .helpers import is_junkies_link, is_keeplinks_link, is_tolink_link, is_hide_link
 
 
 def setup_main_routes(app):
@@ -76,8 +76,11 @@ def setup_main_routes(app):
             has_junkies_links = any(is_junkies_link(l) for l in prioritized_links)
             has_keeplinks_links = any(is_keeplinks_link(l) for l in prioritized_links)
             has_tolink_links = any(is_tolink_link(l) for l in prioritized_links)
+            has_hide_links = any(is_hide_link(l) for l in prioritized_links)
 
-            if has_junkies_links:
+            if has_hide_links:
+                redirect(f"/captcha/hide?data={quote(encoded_payload)}")
+            elif has_junkies_links:
                 redirect(f"/captcha/junkies?data={quote(encoded_payload)}")
             elif has_keeplinks_links:
                 redirect(f"/captcha/keeplinks?data={quote(encoded_payload)}")
