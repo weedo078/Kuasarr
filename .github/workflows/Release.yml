@@ -62,7 +62,7 @@ jobs:
       - name: Build EXE
         run: |
           python kuasarr/providers/version.py
-          pyinstaller --noconfirm --onefile --windowed --add-data "kuasarr/static;kuasarr/static" --add-data "version.json;." --version-file "file_version_info.txt" --name "kuasarr" Kuasarr.py
+          pyinstaller --noconfirm --onefile --console --add-data "kuasarr/static;kuasarr/static" --add-data "version.json;." --version-file "file_version_info.txt" --name "kuasarr" Kuasarr.py
       - uses: actions/upload-artifact@v4
         with:
           name: exe

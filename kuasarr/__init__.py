@@ -52,7 +52,8 @@ def run():
         if arguments.debug:
             os.environ['DEBUG'] = '1'
 
-        sys.stdout = Unbuffered(sys.stdout)
+        if sys.stdout is not None:
+            sys.stdout = Unbuffered(sys.stdout)
 
         banner_lines = [
             f"Kuasarr {version.get_version()} by weedo078 (fork of RiX1337/kuasarr)",
