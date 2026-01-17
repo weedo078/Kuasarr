@@ -2,7 +2,7 @@ name: PR Version Bump Check
 on:
   pull_request:
     branches:
-      - main
+      - kuasarr
     paths:
       - 'version.json'
 
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: kuasarr
           path: main
 
       - name: Checkout PR

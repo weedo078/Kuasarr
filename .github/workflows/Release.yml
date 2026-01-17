@@ -11,7 +11,7 @@ on:
       - '.github/**'
       - 'docker/**'
     branches:
-      - main
+      - kuasarr
 
 env:
   DOCKER_ENDPOINT: "weedo078/kuasarr"
