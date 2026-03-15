@@ -152,7 +152,7 @@ def generate_api_key():
     """Generate and save a new API key."""
     api_key = os.urandom(32).hex()
     Config('API').save("key", api_key)
-    info(f'API key replaced with: "{api_key}!"')
+    info(f'API key replaced with: "{api_key}"!')
     return api_key
 
 

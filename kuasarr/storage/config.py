@@ -13,6 +13,7 @@ from Cryptodome.Random import get_random_bytes
 from Cryptodome.Util.Padding import pad
 
 from kuasarr.providers import shared_state
+from kuasarr.providers.log import info
 from kuasarr.storage.sqlite_database import DataBase
 
 
@@ -215,7 +216,7 @@ class Config(object):
         elif [param for param in self._DEFAULT_CONFIG[self._section] if param[0] == key and param[1] == 'bool']:
             return True if len(res) and res[0].strip('\'"').lower() == 'true' else False
         else:
-            return res[0].strip('\'"') if len(res) > 0 else False
+            return res[0].strip('\'"') if len(res) > 0 else ""
 
     def save(self, key, value):
         self._set_to_config(self._section, key, value)
@@ -240,7 +241,7 @@ def get_clean_hostnames(shared_state):
         if strg and re.match(r'.*[A-Z].*', strg):
             hostnames.save(host, strg.lower())
         if strg:
-            print(f'Using "{strg}" as hostname for "{host}"')
+            info(f'Using "{strg}" as hostname for "{host}"')
         return strg
 
     for name in shared_state.values["sites"]:

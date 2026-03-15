@@ -122,11 +122,8 @@ def newer_version_available():
     Returns the latest version string if a newer release is available,
     otherwise returns None.
     """
-    try:
-        current = get_version()
-        latest = get_latest_version()
-    except:
-        raise
+    current = get_version()
+    latest = get_latest_version()
     if is_newer(latest, current):
         return latest
     return None

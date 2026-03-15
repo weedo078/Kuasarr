@@ -126,8 +126,7 @@ def run():
             temp_file = tempfile.TemporaryFile(dir=config_path)
             temp_file.close()
         except Exception as e:
-            print(f'Could not access "{config_path}": {e}"'
-                  f'Stopping kuasarr...')
+            print(f'Could not access "{config_path}": {e}\nStopping kuasarr...')
             sys.exit(1)
 
         shared_state.set_files(config_path)
@@ -623,12 +622,15 @@ def extract_kv_pairs(input_text, allowed_keys):
     kv_pairs = {}
 
     for line in input_text.splitlines():
-        match = kv_pattern.match(line.strip())
+        stripped = line.strip()
+        if not stripped or stripped.startswith(('#', ';', '[')):
+            continue
+        match = kv_pattern.match(stripped)
         if match:
             key, value = match.groups()
             kv_pairs[key] = value
         else:
-            print(f"Skipping line because it does not contain any supported hostname: {line}")
+            debug(f"Skipping line (no supported hostname key): {line}")
 
     return kv_pairs
 
