@@ -3,9 +3,6 @@ name: Unified CI/CD
 on:
   push:
     branches: [kuasarr]
-    paths-ignore:
-      - '.github/**'
-      - 'docker/**'
   pull_request:
     branches: [kuasarr]
   workflow_dispatch:
