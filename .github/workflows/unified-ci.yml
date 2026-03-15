@@ -18,6 +18,7 @@ on:
 env:
   DOCKER_ENDPOINT: "weedo078/kuasarr"
   GHCR_ENDPOINT: "ghcr.io/weedo078/kuasarr"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
