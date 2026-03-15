@@ -561,12 +561,12 @@ class DBCDispatcher:
             try:
                 season_number = str(int(episode_in_title[0][0]))
                 episode_number = str(int(episode_in_title[0][1]))
-            except:
+            except (IndexError, ValueError):
                 pass
         elif season_in_title:
             try:
                 season_number = str(int(season_in_title[0]))
-            except:
+            except (IndexError, ValueError):
                 pass
 
         season = ""
@@ -579,13 +579,13 @@ class DBCDispatcher:
             try:
                 if season_selection:
                     season += str(season_number)
-            except:
+            except (NameError, ValueError):
                 pass
             episode_selection = soup.find("div", {"id": "selbox_episode"})
             try:
                 if episode_selection:
                     episode += str(episode_number)
-            except:
+            except (NameError, ValueError):
                 pass
 
         links = []
@@ -638,7 +638,7 @@ class DBCDispatcher:
                             ]
                 links.extend(CNL(crypted_data).decrypt())
                 break
-            except:
+            except Exception:
                 if "The owner of this folder has deactivated all hosts in this container in their settings." in soup.text:
                     info(f"Mirror deactivated by the owner: {mirror_url}")
                     continue
@@ -657,7 +657,7 @@ class DBCDispatcher:
                     dlc_file = session.get(dlc_link, headers=headers).content
                     links.extend(DLC(self.shared_state, dlc_file).decrypt())
                     break
-                except:
+                except Exception:
                     info("DLC not found! Falling back to Circle-Captcha buttons...")
                     
                     # Return replacement info for Circle-Captcha handling

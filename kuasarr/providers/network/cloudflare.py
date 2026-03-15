@@ -71,7 +71,15 @@ def update_session_via_flaresolverr(info,
             "error": f"FlareSolverr request failed: {e}"
         }
     except Exception as e:
-        raise RuntimeError(f"Could not reach FlareSolverr: {e}")
+        info(f"Unexpected error reaching FlareSolverr: {e}")
+        return {
+            "status_code": None,
+            "headers": {},
+            "json": None,
+            "text": "",
+            "cookies": [],
+            "error": f"FlareSolverr request failed: {e}"
+        }
 
     fs_json = resp.json()
     if fs_json.get("status") != "ok" or "solution" not in fs_json:
