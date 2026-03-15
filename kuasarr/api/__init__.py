@@ -15,6 +15,8 @@ from kuasarr.api.config import setup_config
 from kuasarr.api.hosters import setup_hosters_routes
 from kuasarr.api.dbc import setup_dbc_routes
 from kuasarr.api.statistics import setup_statistics
+from kuasarr.api.search import setup_search_routes
+from kuasarr.api.manual_links import setup_manual_link_routes
 from kuasarr.providers import shared_state
 from kuasarr.providers.log import debug
 from kuasarr.providers.ui.html_templates import render_button, render_centered_html
@@ -86,6 +88,8 @@ def get_api(shared_state_dict, shared_state_lock):
     setup_hosters_routes(app)
     setup_statistics(app, shared_state)
     setup_dbc_routes(app)
+    setup_search_routes(app)
+    setup_manual_link_routes(app)
 
     # Serve static files (logo, PWA assets)
     @app.get('/static/<filename:path>')

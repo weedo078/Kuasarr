@@ -123,7 +123,7 @@ def setup_search_routes(app: Bottle) -> None:
             "link": details.get("link"),
             "source": source,
             "imdb_id": details.get("imdb_id") or (decoded.get("imdb_id") if decoded else None),
-            "password": decoded.get("password") if decoded else "",
+            "password": decoded.get("password", "") if decoded else "",
         }
 
     def _collect_filters(results: Iterable[Dict[str, Any]]) -> Dict[str, Any]:

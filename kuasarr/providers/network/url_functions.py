@@ -98,8 +98,8 @@ def is_valid_download_link(url):
     
     try:
         domain = extract_domain(url)
-        return any(d in domain.lower() for d in download_domains)
-    except:
+        return any(d in domain.lower() for d in download_domains) if domain else False
+    except Exception:
         return False
 
 def extract_file_id(url):
@@ -205,7 +205,7 @@ def get_url_headers(url=None):
     # Spezifische Headers fÃ¼r bestimmte Domains
     if url:
         domain = extract_domain(url)
-        if 'data-load.me' in domain:
+        if domain and 'data-load.me' in domain:
             headers['Referer'] = 'https://www.data-load.me/'
     
     return headers
