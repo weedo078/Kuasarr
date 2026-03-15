@@ -57,7 +57,7 @@ def connect_to_jd(jd, user, password, device_name):
                 continue
             return False
         break
-    if not device or not isinstance(device, (type, Jddevice)):
+    if not device or not isinstance(device, Jddevice):
         info(f'Device "{device_name}" not found. Available devices may differ or be offline.')
         return False
     else:
@@ -97,7 +97,7 @@ def set_device_from_config():
 def check_device(device):
     """Check if device connection is valid."""
     try:
-        valid = isinstance(device, (type, Jddevice)) and device.downloadcontroller.get_current_state()
+        valid = isinstance(device, Jddevice) and device.downloadcontroller.get_current_state()
     except (AttributeError, KeyError, TokenExpiredException, RequestTimeoutException, MYJDException):
         valid = False
     return valid

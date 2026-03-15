@@ -224,7 +224,7 @@ class Config(object):
 
     def get(self, key, default=None):
         res = self._get_from_config(self.__config__, key)
-        if res is False and default is not None:
+        if not res and default is not None:
             return default
         return res
 

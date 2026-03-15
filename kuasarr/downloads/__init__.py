@@ -351,7 +351,7 @@ def handle_dl(shared_state, title, password, package_id, imdb_id, url, mirror, s
 
 
 def download(shared_state, request_from, title, url, mirror, size_mb, password, imdb_id=None,
-             destination_folder=None):
+             destination_folder=None, manual_job_id=None):
     if "lazylibrarian" in request_from.lower():
         category = "docs"
     elif "radarr" in request_from.lower():
