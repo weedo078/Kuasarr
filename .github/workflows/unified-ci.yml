@@ -2,12 +2,12 @@ name: Unified CI/CD
 
 on:
   push:
-    branches: [kuasarr]
+    branches: [main, kuasarr]
     paths-ignore:
       - '.github/**'
       - 'docker/**'
   pull_request:
-    branches: [kuasarr]
+    branches: [main, kuasarr]
   workflow_dispatch:
     inputs:
       skip_pypi:
@@ -98,10 +98,12 @@ jobs:
           echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Skip auto-bump (manual change detected)
+        id: bump
         if: steps.check-manual.outputs.manual-change == 'true'
         run: |
           echo "Manual version change detected, skipping auto-bump"
           echo "version-bumped=false" >> $GITHUB_OUTPUT
+          echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
 
   # ═══════════════════════════════════════════════════════════════
   # DETECT CHANGES
@@ -109,8 +111,6 @@ jobs:
   detect-changes:
     name: Detect Changes
     needs: auto-version-bump
-    runs-on: ubuntu-latest
-    name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
       python: ${{ steps.filter.outputs.python }}
@@ -301,6 +301,8 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -323,6 +325,8 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -352,6 +356,8 @@ jobs:
         platform: [linux/amd64, linux/arm64]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -382,7 +388,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
@@ -438,9 +444,12 @@ jobs:
 
       - name: Upload to PyPI
         if: ${{ !inputs.skip_pypi }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
           pip install -U twine packaging
-          python -m twine upload ./dist/*.whl -u __token__ -p ${{ secrets.PYPI_TOKEN }}
+          python -m twine upload ./dist/*.whl
 
   # ═══════════════════════════════════════════════════════════════
   # CI SUMMARY
@@ -453,7 +462,7 @@ jobs:
     steps:
       - name: Generate Summary
         run: |
-          echo "## 🚀 Kuasarr CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Kuasarr CI/CD Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Change Detection" >> $GITHUB_STEP_SUMMARY
           echo "- Python/Package: ${{ needs.detect-changes.outputs.python }}" >> $GITHUB_STEP_SUMMARY
