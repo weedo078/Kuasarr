@@ -40,6 +40,7 @@ from kuasarr.providers.captcha.dbc_client import (
 from kuasarr.providers.log import info, debug
 from kuasarr.providers.notifications import send_discord_message
 from kuasarr.providers.statistics import StatsHelper
+from kuasarr.providers.hoster import filter_blocked_hosters
 from kuasarr.downloads import fail
 from kuasarr.downloads.linkcrypters.filecrypt import CNL, DLC
 from kuasarr.downloads.linkcrypters.hide import unhide_links
@@ -212,9 +213,11 @@ class DBCDispatcher:
             # Skip packages with active sessions (being processed)
             if data.get("session"):
                 continue
-            
-            prioritized_links = self._prioritize_links(data.get("links", []))
+
+            title = data.get("title", package_id)
+            prioritized_links = self._filter_and_prioritize_links(data.get("links", []), package_id, title)
             if not prioritized_links:
+                # Links were either empty or all blocked - package was already marked as failed
                 continue
             
             yield package_id, data, prioritized_links
@@ -222,13 +225,23 @@ class DBCDispatcher:
             if picked >= limit:
                 break
 
-    @staticmethod
-    def _prioritize_links(links: Any) -> list:
-        """Prioritize links, preferring rapidgator."""
+    def _filter_and_prioritize_links(self, links: Any, package_id: str, title: str) -> list:
+        """Filter blocked hosters and prioritize links, preferring rapidgator."""
         if not isinstance(links, list):
             return []
-        rapid = [ln for ln in links if isinstance(ln, list) and len(ln) > 1 and "rapidgator" in ln[1].lower()]
-        others = [ln for ln in links if isinstance(ln, list) and len(ln) > 1 and "rapidgator" not in ln[1].lower()]
+
+        # First filter out blocked hosters
+        filtered = filter_blocked_hosters(links)
+
+        if not filtered and links:
+            # All links were blocked - mark package as failed immediately
+            info(f"Package '{title}' has only blocked hosters - skipping captcha solving")
+            self._mark_as_failed(package_id, title, "All hosters blocked by user configuration")
+            return []
+
+        # Prioritize: rapidgator first, then others
+        rapid = [ln for ln in filtered if isinstance(ln, list) and len(ln) > 1 and "rapidgator" in ln[1].lower()]
+        others = [ln for ln in filtered if isinstance(ln, list) and len(ln) > 1 and "rapidgator" not in ln[1].lower()]
         return rapid + others
 
     def _process_package(

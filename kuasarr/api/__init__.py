@@ -3,6 +3,7 @@
 # Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
 
 import base64
+import json
 import os
 
 from bottle import Bottle, static_file, request, response, abort
@@ -17,7 +18,7 @@ from kuasarr.api.dbc import setup_dbc_routes
 from kuasarr.api.statistics import setup_statistics
 from kuasarr.providers import shared_state
 from kuasarr.providers.log import debug
-from kuasarr.providers.ui.html_templates import render_button, render_centered_html
+from kuasarr.providers.ui.html_templates import render_button, render_centered_html, render_success_no_wait
 from kuasarr.providers.web_server import Server
 from kuasarr.storage.config import Config
 
@@ -107,6 +108,20 @@ def get_api(shared_state_dict, shared_state_lock):
     def index():
         protected = shared_state.get_db("protected").retrieve_all_titles()
         api_key = Config('API').get('key')
+        jd_config = Config('JDownloader')
+        jd_user = jd_config.get('user') or ""
+        jd_device_cfg = jd_config.get('device') or ""
+
+        # JDownloader connection status
+        device = shared_state.values.get("device")
+        from kuasarr.providers.myjd_api import Jddevice
+        jd_connected = isinstance(device, Jddevice)
+        if jd_connected:
+            jd_status_pill = '<span class="status-pill success">&#9679; JDownloader connected</span>'
+        elif jd_user and jd_device_cfg:
+            jd_status_pill = '<span class="status-pill warning">&#9679; JDownloader configured (connecting...)</span>'
+        else:
+            jd_status_pill = '<span class="status-pill error">&#9679; JDownloader not configured</span>'
 
         captcha_hint = ""
         if protected:
@@ -123,7 +138,6 @@ def get_api(shared_state_dict, shared_state_lock):
                 </p>
                 """
 
-            plural = 's' if len(protected) > 1 else ''
             captcha_hint += f"""
                 <p>{render_button(f"Solve CAPTCHA{plural}", 'primary', {'onclick': "location.href='/captcha'"})}</p>
             </div>
@@ -133,7 +147,10 @@ def get_api(shared_state_dict, shared_state_lock):
         info = f"""
         <div class="header-section">
             <img src="/static/logo.png" alt="Kuasarr Logo" class="main-logo"/>
-            <p class="tagline">Automated Downloads for Sonarr & Radarr</p>
+            <p class="tagline">Automated Downloads for Sonarr &amp; Radarr</p>
+            <div class="status-pills">
+                {jd_status_pill}
+            </div>
         </div>
 
         {captcha_hint}
@@ -160,17 +177,52 @@ def get_api(shared_state_dict, shared_state_lock):
                     <h3>🌐 URL</h3>
                     <div class="url-wrapper">
                       <input id="urlInput" class="copy-input" type="text" readonly value="{shared_state.values['internal_address']}" />
-                      <button id="copyUrl" class="btn-primary small">📋 Copy</button>
+                      <button id="copyUrl" class="btn-primary btn-sm">📋 Copy</button>
                     </div>
 
                     <h3>🔐 API Key</h3>
                     <div class="api-key-wrapper">
                       <input id="apiKeyInput" class="copy-input" type="password" readonly value="{api_key}" />
-                      <button id="toggleKey" class="btn-secondary small">👁️ Show</button>
-                      <button id="copyKey" class="btn-primary small">📋 Copy</button>
+                      <button id="toggleKey" class="btn-secondary btn-sm">👁️ Show</button>
+                      <button id="copyKey" class="btn-primary btn-sm">📋 Copy</button>
                     </div>
 
-                    <p>{render_button("🔄 Regenerate API key", "secondary", {"onclick": "if(confirm('Regenerate API key?')) location.href='/regenerate-api-key';"})}</p>
+                    <p>
+                        <button class="btn-subtle btn-sm" onclick="showConfirm(
+                            '🔄 Regenerate API Key',
+                            '<p>This will invalidate the current API key. You will need to update it in Radarr/Sonarr.</p>',
+                            'function(){{ location.href=\\'/regenerate-api-key\\'; }}'
+                        )">🔄 Regenerate API Key</button>
+                    </p>
+                </div>
+            </details>
+        </div>
+
+        <hr>
+
+        <div class="section">
+            <h2>☁️ JDownloader</h2>
+            <details id="jdDetails">
+                <summary>Configure JDownloader credentials</summary>
+                <div style="text-align:left; margin-top: 1rem;">
+                    <label for="jd_user">MyJDownloader Email</label>
+                    <input type="email" id="jd_user" placeholder="your@email.com" value="{jd_user}">
+
+                    <label for="jd_pass" style="margin-top: 0.75rem;">MyJDownloader Password</label>
+                    <input type="password" id="jd_pass" placeholder="{'••••••••' if jd_user else 'enter password'}">
+
+                    <p style="margin-top: 0.75rem;">
+                        <button class="btn-primary btn-sm" onclick="verifyJD()">🔍 Verify &amp; load devices</button>
+                    </p>
+
+                    <div id="jd_device_section" style="display:none; margin-top: 0.75rem;">
+                        <label for="jd_device">Select Device</label>
+                        <select id="jd_device"></select>
+                        <p style="margin-top: 0.5rem;">
+                            <button class="btn-primary btn-sm" onclick="saveJD()">💾 Save &amp; connect</button>
+                        </p>
+                    </div>
+                    <div id="jd_status_msg" style="margin-top: 0.5rem; font-size: 0.9rem;"></div>
                 </div>
             </details>
         </div>
@@ -190,7 +242,7 @@ def get_api(shared_state_dict, shared_state_lock):
                 </button>
                 <button class="action-btn" onclick="location.href='/statistics'">
                     <span class="action-icon">📊</span>
-                    <span class="action-text">View Statistics</span>
+                    <span class="action-text">Statistics</span>
                 </button>
                 <button class="action-btn" onclick="location.href='/captcha-config'">
                     <span class="action-icon">🔑</span>
@@ -210,93 +262,98 @@ def get_api(shared_state_dict, shared_state_lock):
         <style>
             .header-section {{
                 text-align: center;
-                margin-bottom: 30px;
+                margin-bottom: 24px;
             }}
             .main-logo {{
-                width: 150px;
+                width: 120px;
                 height: auto;
-                margin-bottom: 10px;
+                margin-bottom: 8px;
                 filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
             }}
             .tagline {{
-                font-size: 1.1em;
-                color: #666;
-                margin: 0;
+                font-size: 1.05em;
+                color: var(--text-muted);
+                margin: 0 0 8px 0;
             }}
-            body.dark .tagline {{
-                color: #aaa;
+            .status-pills {{
+                margin-top: 6px;
             }}
-            .section {{ margin: 20px 0; }}
-            .api-settings {{ padding: 15px 0; }}
-            hr {{ margin: 25px 0; border: none; border-top: 1px solid #ddd; }}
-            details {{ margin: 10px 0; }}
-            summary {{ 
-                cursor: pointer; 
-                padding: 8px 0; 
+            .section {{ margin: 16px 0; }}
+            .api-settings {{ padding: 12px 0; text-align: left; }}
+            .api-settings h3 {{ text-align: left; margin-top: 0.75rem; }}
+            hr {{ margin: 20px 0; border: none; border-top: 1px solid var(--divider-color); }}
+            details {{ margin: 8px 0; }}
+            summary {{
+                cursor: pointer;
+                padding: 6px 0;
                 font-weight: 500;
+                user-select: none;
             }}
-            summary:hover {{ 
-                color: #0066cc; 
+            summary:hover {{ color: var(--primary); }}
+            .url-wrapper, .api-key-wrapper {{
+                display: flex;
+                gap: 0.5rem;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }}
+            .url-wrapper input, .api-key-wrapper input {{
+                flex: 1;
+                margin-bottom: 0;
             }}
             .action-grid {{
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-                gap: 12px;
-                margin-top: 15px;
+                grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                gap: 10px;
+                margin-top: 12px;
             }}
             .action-btn {{
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                padding: 20px 15px;
-                border: 1px solid rgba(13, 110, 253, 0.3);
-                border-radius: 12px;
-                background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
+                padding: 18px 12px;
+                border: 1px solid var(--card-border);
+                border-radius: 10px;
+                background: var(--card-bg);
                 cursor: pointer;
                 transition: all 0.2s ease;
+                color: var(--fg-color);
+                margin-top: 0;
+                font-size: 1rem;
             }}
             .action-btn:hover {{
-                transform: translateY(-3px);
-                box-shadow: 0 6px 20px rgba(13, 110, 253, 0.25);
-                border-color: #0d6efd;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 16px var(--card-shadow);
+                border-color: var(--primary);
             }}
             .action-icon {{
-                font-size: 2em;
-                margin-bottom: 8px;
+                font-size: 1.8em;
+                margin-bottom: 6px;
             }}
             .action-text {{
-                font-size: 0.9em;
+                font-size: 0.85em;
                 font-weight: 500;
-                color: #1f2933;
-            }}
-            @media (prefers-color-scheme: dark) {{
-                .action-text {{
-                    color: #f8f9fa;
-                }}
-            }}
-            body.dark .action-btn {{
-                background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0.25) 100%);
             }}
         </style>
 
         <script>
+          // Copy URL
           const urlInput = document.getElementById('urlInput');
           const copyUrlBtn = document.getElementById('copyUrl');
-
           if (copyUrlBtn) {{
             copyUrlBtn.onclick = () => {{
-              urlInput.select();
-              document.execCommand('copy');
+              navigator.clipboard.writeText(urlInput.value).catch(() => {{
+                urlInput.select(); document.execCommand('copy');
+              }});
               copyUrlBtn.innerText = '✅ Copied!';
               setTimeout(() => {{ copyUrlBtn.innerText = '📋 Copy'; }}, 2000);
             }};
           }}
 
+          // Show/copy API key
           const apiInput = document.getElementById('apiKeyInput');
           const toggleBtn = document.getElementById('toggleKey');
           const copyBtn = document.getElementById('copyKey');
-
           if (toggleBtn) {{
             toggleBtn.onclick = () => {{
               const isHidden = apiInput.type === 'password';
@@ -304,46 +361,158 @@ def get_api(shared_state_dict, shared_state_lock):
               toggleBtn.innerText = isHidden ? '🙈 Hide' : '👁️ Show';
             }};
           }}
-
           if (copyBtn) {{
             copyBtn.onclick = () => {{
-              apiInput.type = 'text';
-              apiInput.select();
-              document.execCommand('copy');
+              navigator.clipboard.writeText(apiInput.value).catch(() => {{
+                apiInput.type = 'text'; apiInput.select(); document.execCommand('copy');
+              }});
               copyBtn.innerText = '✅ Copied!';
-              toggleBtn.innerText = '🙈 Hide';
               setTimeout(() => {{ copyBtn.innerText = '📋 Copy'; }}, 2000);
             }};
           }}
 
-          // Handle details toggle
+          // API details toggle label
           const apiDetails = document.getElementById('apiDetails');
           const apiSummary = document.getElementById('apiSummary');
-
           if (apiDetails && apiSummary) {{
             apiDetails.addEventListener('toggle', () => {{
-              if (apiDetails.open) {{
-                apiSummary.textContent = '🔒 Hide API Settings';
+              apiSummary.textContent = apiDetails.open ? '🔒 Hide API Settings' : '🔑 Show API Settings';
+            }});
+          }}
+
+          // JDownloader verify & save
+          function verifyJD() {{
+            const user = document.getElementById('jd_user').value.trim();
+            const pass = document.getElementById('jd_pass').value.trim();
+            const statusEl = document.getElementById('jd_status_msg');
+            if (!user || !pass) {{
+              statusEl.innerHTML = '<span style="color:var(--error-color)">Please enter email and password.</span>';
+              return;
+            }}
+            statusEl.innerHTML = 'Verifying...';
+            kuasarrApiFetch('/api/jdownloader/verify', {{
+              method: 'POST',
+              headers: {{'Content-Type': 'application/json'}},
+              body: JSON.stringify({{user, password: pass}})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+              if (data.devices && data.devices.length > 0) {{
+                const sel = document.getElementById('jd_device');
+                sel.innerHTML = '';
+                data.devices.forEach(d => {{
+                  const opt = document.createElement('option');
+                  opt.value = d;
+                  opt.textContent = d;
+                  sel.appendChild(opt);
+                }});
+                // Pre-select configured device
+                const cfg = "{jd_device_cfg}";
+                if (cfg) {{
+                  const existing = [...sel.options].find(o => o.value === cfg);
+                  if (existing) existing.selected = true;
+                }}
+                document.getElementById('jd_device_section').style.display = 'block';
+                statusEl.innerHTML = '<span style="color:var(--success-color)">✅ ' + data.devices.length + ' device(s) found.</span>';
               }} else {{
-                apiSummary.textContent = '🔑 Show API Settings';
+                statusEl.innerHTML = '<span style="color:var(--error-color)">❌ ' + (data.error || 'No devices found.') + '</span>';
               }}
+            }})
+            .catch(e => {{
+              statusEl.innerHTML = '<span style="color:var(--error-color)">❌ Request failed: ' + e + '</span>';
+            }});
+          }}
+
+          function saveJD() {{
+            const user = document.getElementById('jd_user').value.trim();
+            const pass = document.getElementById('jd_pass').value.trim();
+            const device = document.getElementById('jd_device').value;
+            const statusEl = document.getElementById('jd_status_msg');
+            statusEl.innerHTML = 'Saving and connecting...';
+            kuasarrApiFetch('/api/jdownloader/save', {{
+              method: 'POST',
+              headers: {{'Content-Type': 'application/json'}},
+              body: JSON.stringify({{user, password: pass, device}})
+            }})
+            .then(r => r.json())
+            .then(data => {{
+              if (data.success) {{
+                statusEl.innerHTML = '<span style="color:var(--success-color)">✅ Connected! Reloading...</span>';
+                setTimeout(() => location.reload(), 1500);
+              }} else {{
+                statusEl.innerHTML = '<span style="color:var(--error-color)">❌ ' + (data.error || 'Failed to connect.') + '</span>';
+              }}
+            }})
+            .catch(e => {{
+              statusEl.innerHTML = '<span style="color:var(--error-color)">❌ Request failed: ' + e + '</span>';
             }});
           }}
         </script>
         """
         return render_centered_html(info)
 
+    @app.post('/api/jdownloader/verify')
+    def jd_verify():
+        """Verify JDownloader credentials and return list of devices."""
+        response.content_type = 'application/json'
+        try:
+            data = json.loads(request.body.read().decode('utf-8'))
+            user = data.get('user', '').strip()
+            password = data.get('password', '').strip()
+        except Exception:
+            return json.dumps({'error': 'Invalid request'})
+
+        if not user or not password:
+            return json.dumps({'error': 'Email and password required'})
+
+        from kuasarr.providers.jdownloader import get_devices
+        devices = get_devices(user, password)
+        if devices is None:
+            return json.dumps({'error': 'Authentication failed or API unreachable'})
+        # devices is a list of dicts: {'name': '...', 'id': '...', 'type': 'jd'}
+        names = [d['name'] for d in devices if isinstance(d, dict) and d.get('name')]
+        return json.dumps({'devices': names})
+
+    @app.post('/api/jdownloader/save')
+    def jd_save():
+        """Save JDownloader credentials and connect."""
+        response.content_type = 'application/json'
+        try:
+            data = json.loads(request.body.read().decode('utf-8'))
+            user = data.get('user', '').strip()
+            password = data.get('password', '').strip()
+            device = data.get('device', '').strip()
+        except Exception:
+            return json.dumps({'success': False, 'error': 'Invalid request'})
+
+        if not user or not password or not device:
+            return json.dumps({'success': False, 'error': 'All fields required'})
+
+        # Basic email validation
+        import re
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', user):
+            return json.dumps({'success': False, 'error': 'Invalid email format'})
+
+        # SECURITY FIX: Verify connection BEFORE saving credentials
+        from kuasarr.providers.jdownloader import set_device
+        ok = set_device(user, password, device)
+        if not ok:
+            return json.dumps({'success': False, 'error': 'Connection failed. Please verify credentials and device name.'})
+
+        # Only save to config after successful connection
+        config = Config('JDownloader')
+        config.save('user', user)
+        config.save('password', password)
+        config.save('device', device)
+
+        return json.dumps({'success': True})
+
     @app.get('/regenerate-api-key')
     def regenerate_api_key():
-        api_key = shared_state.generate_api_key()
-        return f"""
-        <script>
-          alert('API key replaced with: {api_key}');
-          window.location.href = '/';
-        </script>
-        """
+        new_key = shared_state.generate_api_key()
+        return render_success_no_wait(
+            "API Key regenerated",
+            f'<p>New key: <code>{new_key}</code></p><p>Update it in Radarr/Sonarr before continuing.</p>'
+        )
 
     Server(app, listen='0.0.0.0', port=shared_state.values["port"]).serve_forever()
-
-
-
