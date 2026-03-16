@@ -7,13 +7,9 @@ from kuasarr.providers.version import get_version
 
 
 def render_centered_html(inner_content, footer_content=""):
-    # Embed API key in page for JS use (safe: served from localhost)
-    api_key = ""
-    try:
-        from kuasarr.storage.config import Config
-        api_key = Config('API').get('key') or ""
-    except Exception:
-        api_key = ""
+    # NOTE: API key is intentionally NOT exposed to JavaScript for security.
+    # WebUI routes use BasicAuth (if configured) or session-based auth.
+    # API routes (/api/*) use X-API-Key header provided by Radarr/Sonarr.
 
     head = (
         '''
@@ -394,37 +390,20 @@ def render_centered_html(inner_content, footer_content=""):
             }
         </style>
         <script>
-        window.KUASARR_API_KEY = '''
-        + repr(api_key)
-        + ''';
+        // SECURITY: API key is NOT exposed to JavaScript.
+        // WebUI endpoints rely on BasicAuth (if configured).
+        // External API endpoints (/api/* for Radarr/Sonarr) use X-API-Key header.
 
         document.addEventListener('DOMContentLoaded', function() {
             const h1 = document.querySelector('h1');
             if (h1) {
                 h1.onclick = function() { window.location.href = '/'; };
             }
-
-            // Auto-inject API key into API forms
-            if (window.KUASARR_API_KEY) {
-                document.querySelectorAll('form[action^="/api"]').forEach(function(form) {
-                    if (form.querySelector('input[name="apikey"]')) return;
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'apikey';
-                    input.value = window.KUASARR_API_KEY;
-                    form.appendChild(input);
-                });
-            }
         });
 
+        // Helper for WebUI API calls (no API key needed - uses session/BasicAuth)
         function kuasarrApiFetch(path, options) {
-            const requestOptions = options ? { ...options } : {};
-            const headers = new Headers(requestOptions.headers || {});
-            if (window.KUASARR_API_KEY && !headers.has('X-API-Key')) {
-                headers.set('X-API-Key', window.KUASARR_API_KEY);
-            }
-            requestOptions.headers = headers;
-            return fetch(path, requestOptions);
+            return fetch(path, options);
         }
         </script>
     </head>'''

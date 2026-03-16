@@ -488,16 +488,24 @@ def get_api(shared_state_dict, shared_state_lock):
         if not user or not password or not device:
             return json.dumps({'success': False, 'error': 'All fields required'})
 
+        # Basic email validation
+        import re
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', user):
+            return json.dumps({'success': False, 'error': 'Invalid email format'})
+
+        # SECURITY FIX: Verify connection BEFORE saving credentials
+        from kuasarr.providers.jdownloader import set_device
+        ok = set_device(user, password, device)
+        if not ok:
+            return json.dumps({'success': False, 'error': 'Connection failed. Please verify credentials and device name.'})
+
+        # Only save to config after successful connection
         config = Config('JDownloader')
         config.save('user', user)
         config.save('password', password)
         config.save('device', device)
 
-        from kuasarr.providers.jdownloader import set_device
-        ok = set_device(user, password, device)
-        if ok:
-            return json.dumps({'success': True})
-        return json.dumps({'success': False, 'error': 'Connected to API but device not reachable. Check device name.'})
+        return json.dumps({'success': True})
 
     @app.get('/regenerate-api-key')
     def regenerate_api_key():
