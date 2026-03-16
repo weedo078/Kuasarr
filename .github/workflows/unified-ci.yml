@@ -91,14 +91,19 @@ jobs:
           # Update version.json
           echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
 
-          # Configure git
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          # Only commit and push on actual push events (not PRs)
+          if [ "${{ github.event_name }}" == "push" ]; then
+            # Configure git
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
 
-          # Commit and push
-          git add version.json
-          git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
-          git push origin HEAD:${{ github.ref_name }}
+            # Commit and push
+            git add version.json
+            git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "PR build - skipping commit/push"
+          fi
 
           echo "version-bumped=true" >> $GITHUB_OUTPUT
           echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
@@ -121,6 +126,10 @@ jobs:
           elif [ "${{ steps.skip-bump.outcome }}" == "success" ]; then
             echo "version-bumped=${{ steps.skip-bump.outputs.version-bumped }}" >> $GITHUB_OUTPUT
             echo "new-version=${{ steps.skip-bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          else
+            # Fallback for PRs or other cases
+            echo "version-bumped=false" >> $GITHUB_OUTPUT
+            echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
           else
             echo "version-bumped=false" >> $GITHUB_OUTPUT
           fi
