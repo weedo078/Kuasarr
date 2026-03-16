@@ -3,9 +3,15 @@ name: Unified CI/CD
 on:
   push:
     branches: [main, kuasarr]
-    paths-ignore:
-      - '.github/**'
-      - 'docker/**'
+    paths:
+      - 'kuasarr/**'
+      - 'setup.py'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'Kuasarr.py'
+      - 'MANIFEST.in'
+      - '.github/workflows/**'
+      - 'Dockerfile'
   pull_request:
     branches: [main, kuasarr]
   workflow_dispatch:
