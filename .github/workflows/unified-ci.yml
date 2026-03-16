@@ -38,7 +38,7 @@ jobs:
     name: Auto Version Bump
     runs-on: ubuntu-latest
     outputs:
-      version-bumped: ${{ steps.bump.outputs.version-bumped }}
+      version-bumped: ${{ steps.set-output.outputs.version-bumped }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,12 +104,26 @@ jobs:
           echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Skip auto-bump (manual change detected)
-        id: bump
+        id: skip-bump
         if: steps.check-manual.outputs.manual-change == 'true'
         run: |
           echo "Manual version change detected, skipping auto-bump"
           echo "version-bumped=false" >> $GITHUB_OUTPUT
           echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+
+      - name: Set output
+        id: set-output
+        if: always()
+        run: |
+          if [ "${{ steps.bump.outcome }}" == "success" ]; then
+            echo "version-bumped=${{ steps.bump.outputs.version-bumped }}" >> $GITHUB_OUTPUT
+            echo "new-version=${{ steps.bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.skip-bump.outcome }}" == "success" ]; then
+            echo "version-bumped=${{ steps.skip-bump.outputs.version-bumped }}" >> $GITHUB_OUTPUT
+            echo "new-version=${{ steps.skip-bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version-bumped=false" >> $GITHUB_OUTPUT
+          fi
 
   # ═══════════════════════════════════════════════════════════════
   # DETECT CHANGES
