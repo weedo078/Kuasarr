@@ -13,9 +13,12 @@ from bottle import redirect
 import kuasarr.providers.ui.html_images as images
 from kuasarr.downloads.packages import delete_package
 from kuasarr.providers import shared_state
+from kuasarr.providers.log import info
 from kuasarr.providers.ui.html_templates import render_button, render_centered_html, render_fail, render_success
 
 from .helpers import is_junkies_link, is_keeplinks_link, is_tolink_link, is_hide_link
+from kuasarr.providers.hoster import filter_blocked_hosters
+from kuasarr.downloads import fail
 
 
 def setup_main_routes(app):
@@ -55,8 +58,24 @@ def setup_main_routes(app):
 
             filecrypt_session = data.get("session", None)
 
-            rapid = [ln for ln in links if "rapidgator" in ln[1].lower()]
-            others = [ln for ln in links if "rapidgator" not in ln[1].lower()]
+            # Filter blocked hosters first
+            filtered_links = filter_blocked_hosters(links)
+
+            if not filtered_links and links:
+                # All links were blocked - mark as failed and skip
+                info(f"Package '{title}' has only blocked hosters - marking as failed")
+                fail(title, package_id, shared_state,
+                     reason=f"All hosters blocked by user configuration")
+                shared_state.get_db("protected").delete(package_id)
+                return render_centered_html(f'''<h1><img src="{images.logo}" type="image/png" alt="Kuasarr logo" class="logo"/>Kuasarr</h1>
+                <p><b>Package skipped:</b> All links in "{title}" are from blocked hosters.</p>
+                <p>Package has been moved to failed downloads.</p>
+                <p>
+                    {render_button("Back to CAPTCHA Queue", "primary", {"onclick": "location.href='/captcha'"})}
+                </p>''')
+
+            rapid = [ln for ln in filtered_links if "rapidgator" in ln[1].lower()]
+            others = [ln for ln in filtered_links if "rapidgator" not in ln[1].lower()]
             prioritized_links = rapid + others
 
             original_url = data.get("original_url", "")
