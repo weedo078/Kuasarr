@@ -48,15 +48,16 @@ jobs:
         id: check-manual
         run: |
           set -euo pipefail
+          CURRENT_VERSION=$(jq -r .version version.json)
+          echo "current-version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
           # Get the previous version from the last commit
           if git show HEAD~1:version.json > /dev/null 2>&1; then
             OLD_VERSION=$(git show HEAD~1:version.json | jq -r .version)
-            NEW_VERSION=$(jq -r .version version.json)
             echo "Old version: $OLD_VERSION"
-            echo "New version: $NEW_VERSION"
-            if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+            echo "Current version: $CURRENT_VERSION"
+            if [ "$OLD_VERSION" != "$CURRENT_VERSION" ]; then
               echo "manual-change=true" >> $GITHUB_OUTPUT
-              echo "Version was manually bumped: $OLD_VERSION -> $NEW_VERSION"
+              echo "Version was manually bumped: $OLD_VERSION -> $CURRENT_VERSION"
             else
               echo "manual-change=false" >> $GITHUB_OUTPUT
             fi
@@ -69,7 +70,7 @@ jobs:
         if: steps.check-manual.outputs.manual-change == 'false'
         run: |
           set -euo pipefail
-          CURRENT_VERSION=$(jq -r .version version.json)
+          CURRENT_VERSION="${{ steps.check-manual.outputs.current-version }}"
           echo "Current version: $CURRENT_VERSION"
 
           # Validate semver format
@@ -98,20 +99,37 @@ jobs:
 
           echo "New version: $NEW_VERSION"
 
-          # Update version.json
-          echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
+          # Update version.json using jq to prevent injection
+          jq --arg version "$NEW_VERSION" '.version = $version' version.json > version.json.tmp && mv version.json.tmp version.json
 
           # Configure git
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          # Commit and push
+          # Commit and push with retry logic
           git add version.json
           git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
-          git push origin HEAD:${{ github.ref_name }}
+
+          # Retry push up to 3 times
+          for i in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then
+              echo "Push successful"
+              break
+            fi
+            echo "Push failed, retrying in 2s..."
+            sleep 2
+            git pull --rebase origin ${{ github.ref_name }} || true
+          done
 
           echo "version-bumped=true" >> $GITHUB_OUTPUT
           echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Output current version (if manual change)
+        id: bump
+        if: steps.check-manual.outputs.manual-change == 'true'
+        run: |
+          echo "version-bumped=false" >> $GITHUB_OUTPUT
+          echo "new-version=${{ steps.check-manual.outputs.current-version }}" >> $GITHUB_OUTPUT
 
   # ═══════════════════════════════════════════════════════════════
   # DETECT CHANGES
@@ -388,7 +406,12 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          echo "version=${{ needs.auto-version-bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          VERSION="${{ needs.auto-version-bump.outputs.new-version }}"
+          if [[ -z "$VERSION" ]]; then
+            echo "Warning: auto-version-bump output is empty, reading from file" >&2
+            VERSION=$(jq -r .version version.json)
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -441,7 +464,12 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          echo "version=${{ needs.auto-version-bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          VERSION="${{ needs.auto-version-bump.outputs.new-version }}"
+          if [[ -z "$VERSION" ]]; then
+            echo "Warning: auto-version-bump output is empty, reading from file" >&2
+            VERSION=$(jq -r .version version.json)
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - uses: actions/download-artifact@v4
         with:
