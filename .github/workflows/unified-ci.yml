@@ -46,12 +46,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if version.json was manually changed
         id: check-manual
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             echo "manual-change=false" >> $GITHUB_OUTPUT
             exit 0
@@ -78,104 +79,35 @@ jobs:
         id: bump
         if: steps.check-manual.outputs.manual-change == 'false' && github.event_name != 'pull_request'
         run: |
-          # Helper function to calculate next patch version
-          # Validates semver format (MAJOR.MINOR.PATCH) before parsing
-          bump_version() {
-            local version=$1
+          set -euo pipefail
+          CURRENT_VERSION=$(jq -r .version version.json)
+          echo "Current version: $CURRENT_VERSION"
 
-            # Validate semver format (MAJOR.MINOR.PATCH)
-            if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-              echo "Error: Invalid version format: '$version'" >&2
-              echo "Expected format: MAJOR.MINOR.PATCH (e.g., 1.2.3)" >&2
-              return 1
-            fi
+          # Parse version components
+          MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+          MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+          PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
 
-            local MAJOR=$(echo "$version" | cut -d. -f1)
-            local MINOR=$(echo "$version" | cut -d. -f2)
-            local PATCH=$(echo "$version" | cut -d. -f3)
+          # Bump patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
 
-            # Validate that each component is numeric
-            if ! echo "$MAJOR" | grep -qE '^[0-9]+$' || \
-               ! echo "$MINOR" | grep -qE '^[0-9]+$' || \
-               ! echo "$PATCH" | grep -qE '^[0-9]+$'; then
-              echo "Error: Version components must be numeric" >&2
-              echo "MAJOR: '$MAJOR', MINOR: '$MINOR', PATCH: '$PATCH'" >&2
-              return 1
-            fi
+          echo "New version: $NEW_VERSION"
 
-            echo "${MAJOR}.${MINOR}.$((PATCH + 1))"
-          }
-
-          # Configure git (do this once)
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          # Update version.json
+          echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
 
           # Only commit and push on actual push events (not PRs)
           if [ "${{ github.event_name }}" == "push" ]; then
-            MAX_RETRIES=3
-            RETRY_COUNT=0
-            SUCCESS=false
+            # Configure git
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
 
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" == "false" ]; do
-              # Fetch latest from remote to detect if another workflow bumped the version
-              git fetch origin ${{ github.ref_name }}
-
-              CURRENT_VERSION=$(jq -r .version version.json)
-              echo "Current version: $CURRENT_VERSION"
-
-              # Check if version was already bumped by another concurrent workflow
-              REMOTE_VERSION=$(git show origin/${{ github.ref_name }}:version.json 2>/dev/null | jq -r .version || echo "")
-              if [ -n "$REMOTE_VERSION" ] && [ "$REMOTE_VERSION" != "$CURRENT_VERSION" ]; then
-                echo "Remote version ($REMOTE_VERSION) differs from local ($CURRENT_VERSION)"
-                echo "Another workflow already bumped the version, pulling latest..."
-                git checkout origin/${{ github.ref_name }} -- version.json
-                CURRENT_VERSION=$(jq -r .version version.json)
-                echo "Updated current version: $CURRENT_VERSION"
-              fi
-
-              # Calculate new version
-              NEW_VERSION=$(bump_version "$CURRENT_VERSION")
-              echo "Attempting to bump to: $NEW_VERSION"
-
-              # Update version.json
-              echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
-
-              # Stage the change
-              git add version.json
-
-              # Check if there's actually a change to commit
-              if git diff --cached --quiet; then
-                echo "No changes to commit - version may have been bumped already"
-                SUCCESS=true
-                break
-              fi
-
-              # Commit
-              git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
-
-              # Try to push - if it fails, another workflow may have pushed first
-              if git push origin HEAD:${{ github.ref_name }}; then
-                echo "Successfully pushed version bump to ${NEW_VERSION}"
-                SUCCESS=true
-              else
-                echo "Push failed, likely due to concurrent update. Retrying..."
-                RETRY_COUNT=$((RETRY_COUNT + 1))
-                # Reset to remote state and retry
-                git reset --hard origin/${{ github.ref_name }}
-                sleep 2
-              fi
-            done
-
-            if [ "$SUCCESS" != "true" ]; then
-              echo "ERROR: Failed to bump version after $MAX_RETRIES attempts"
-              exit 1
-            fi
+            # Commit and push
+            git add version.json
+            git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
           else
-            # PR build - just calculate but don't commit
-            CURRENT_VERSION=$(jq -r .version version.json)
-            echo "Current version: $CURRENT_VERSION"
-            NEW_VERSION=$(bump_version "$CURRENT_VERSION")
-            echo "New version (calculated, not committed): $NEW_VERSION"
             echo "PR build - skipping commit/push"
           fi
 
@@ -186,6 +118,7 @@ jobs:
         id: skip-bump
         if: steps.check-manual.outputs.manual-change == 'true'
         run: |
+          set -euo pipefail
           echo "Manual version change detected, skipping auto-bump"
           echo "version-bumped=false" >> $GITHUB_OUTPUT
           echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
@@ -194,6 +127,7 @@ jobs:
         id: set-output
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.bump.outcome }}" == "success" ]; then
             echo "version-bumped=${{ steps.bump.outputs.version-bumped }}" >> $GITHUB_OUTPUT
             echo "new-version=${{ steps.bump.outputs.new-version }}" >> $GITHUB_OUTPUT
@@ -220,7 +154,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 100
+          fetch-depth: 0
 
       - name: Detect Changes
         uses: dorny/paths-filter@v3
@@ -262,6 +196,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
       - name: Review with Kimi
         uses: actions/github-script@v7
         env:
@@ -368,14 +303,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install build dependencies
-        run: pip install wheel setuptools
+        run: |
+          set -euo pipefail
+          pip install wheel setuptools
       - name: Build Wheel
-        run: python setup.py sdist bdist_wheel
+        run: |
+          set -euo pipefail
+          python setup.py sdist bdist_wheel
       - uses: actions/upload-artifact@v4
         with:
           name: wheel
@@ -392,16 +331,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install dependencies
         run: |
+          set -euo pipefail
           pip install -r requirements.txt
           pip install pyinstaller build
       - name: Build EXE
         run: |
+          set -euo pipefail
           python kuasarr/providers/version.py
           pyinstaller --noconfirm --onefile --console --add-data "kuasarr/static;kuasarr/static" --add-data "version.json;." --version-file "file_version_info.txt" --name "kuasarr" Kuasarr.py
       - uses: actions/upload-artifact@v4
@@ -423,7 +364,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -432,7 +373,9 @@ jobs:
 
       - name: Get Version
         id: version
-        run: echo "version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+        run: |
+          set -euo pipefail
+          echo "version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -478,12 +421,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-          fetch-tags: true
+          fetch-depth: 0
 
       - name: Get Version
         id: version
-        run: echo "version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+        run: |
+          set -euo pipefail
+          echo "version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
 
       - uses: actions/download-artifact@v4
         with:
@@ -515,6 +459,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
+          set -euo pipefail
           pip install -U twine packaging
           python -m twine upload ./dist/*.whl
 
@@ -529,6 +474,7 @@ jobs:
     steps:
       - name: Generate Summary
         run: |
+          set -euo pipefail
           echo "## Kuasarr CI/CD Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Change Detection" >> $GITHUB_STEP_SUMMARY
