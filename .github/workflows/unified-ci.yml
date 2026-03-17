@@ -311,6 +311,7 @@ jobs:
         run: |
           set -euo pipefail
           pip install wheel setuptools
+          pip install -r requirements.txt
       - name: Build Wheel
         run: |
           set -euo pipefail
@@ -336,11 +337,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
+        shell: bash
         run: |
           set -euo pipefail
           pip install -r requirements.txt
           pip install pyinstaller build
       - name: Build EXE
+        shell: bash
         run: |
           set -euo pipefail
           python kuasarr/providers/version.py
