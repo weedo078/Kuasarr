@@ -130,8 +130,6 @@ jobs:
             # Fallback for PRs or other cases
             echo "version-bumped=false" >> $GITHUB_OUTPUT
             echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
-          else
-            echo "version-bumped=false" >> $GITHUB_OUTPUT
           fi
 
   # ═══════════════════════════════════════════════════════════════
