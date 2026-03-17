@@ -72,7 +72,7 @@ jobs:
 
       - name: Auto-bump patch version
         id: bump
-        if: steps.check-manual.outputs.manual-change == 'false'
+        if: steps.check-manual.outputs.manual-change == 'false' && github.event_name != 'pull_request'
         run: |
           CURRENT_VERSION=$(jq -r .version version.json)
           echo "Current version: $CURRENT_VERSION"
