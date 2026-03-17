@@ -46,8 +46,8 @@ jobs:
           # Fetch all tags
           git fetch --tags
 
-          # Get latest tag
-          latest_tag=$(git tag -l 'v*.*.*' | sort -V | tail -n1 || true)
+          # Get latest tag matching strict semver (vMAJOR.MINOR.PATCH only, no suffixes)
+          latest_tag=$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
 
           if [ -z "$latest_tag" ]; then
             new_version="0.0.1"
