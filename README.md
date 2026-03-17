@@ -6,8 +6,6 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/weedo078/kuasarr?label=Downloads&logo=docker)](https://hub.docker.com/r/weedo078/kuasarr)
 [![Matrix Chat](https://img.shields.io/badge/Matrix-Join%20Chat-black?logo=matrix)](https://matrix.to/#/@kuasarr-support:envs.net)
 
-### Quasarr fork with additional hosters (e.g. DL, WX, AD), and an open download API. 
-
 Kuasarr connects JDownloader with Radarr, Sonarr and LazyLibrarian. It also decrypts links protected by CAPTCHAs.
 
 Kuasarr pretends to be both `Newznab Indexer` and `SABnzbd client`. Therefore, do not try to use it with real usenet
