@@ -37,6 +37,10 @@ jobs:
   auto-version-bump:
     name: Auto Version Bump
     runs-on: ubuntu-latest
+    # Prevent race conditions: only one version bump at a time per branch
+    concurrency:
+      group: version-bump-${{ github.ref_name }}
+      cancel-in-progress: false
     outputs:
       version-bumped: ${{ steps.set-output.outputs.version-bumped }}
     steps:
@@ -74,34 +78,85 @@ jobs:
         id: bump
         if: steps.check-manual.outputs.manual-change == 'false' && github.event_name != 'pull_request'
         run: |
-          CURRENT_VERSION=$(jq -r .version version.json)
-          echo "Current version: $CURRENT_VERSION"
+          # Helper function to calculate next patch version
+          bump_version() {
+            local version=$1
+            local MAJOR=$(echo "$version" | cut -d. -f1)
+            local MINOR=$(echo "$version" | cut -d. -f2)
+            local PATCH=$(echo "$version" | cut -d. -f3)
+            echo "${MAJOR}.${MINOR}.$((PATCH + 1))"
+          }
 
-          # Parse version components
-          MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
-          MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
-          PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
-
-          # Bump patch version
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
-
-          echo "New version: $NEW_VERSION"
-
-          # Update version.json
-          echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
+          # Configure git (do this once)
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
 
           # Only commit and push on actual push events (not PRs)
           if [ "${{ github.event_name }}" == "push" ]; then
-            # Configure git
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            SUCCESS=false
 
-            # Commit and push
-            git add version.json
-            git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" == "false" ]; do
+              # Fetch latest from remote to detect if another workflow bumped the version
+              git fetch origin ${{ github.ref_name }}
+
+              CURRENT_VERSION=$(jq -r .version version.json)
+              echo "Current version: $CURRENT_VERSION"
+
+              # Check if version was already bumped by another concurrent workflow
+              REMOTE_VERSION=$(git show origin/${{ github.ref_name }}:version.json 2>/dev/null | jq -r .version || echo "")
+              if [ -n "$REMOTE_VERSION" ] && [ "$REMOTE_VERSION" != "$CURRENT_VERSION" ]; then
+                echo "Remote version ($REMOTE_VERSION) differs from local ($CURRENT_VERSION)"
+                echo "Another workflow already bumped the version, pulling latest..."
+                git checkout origin/${{ github.ref_name }} -- version.json
+                CURRENT_VERSION=$(jq -r .version version.json)
+                echo "Updated current version: $CURRENT_VERSION"
+              fi
+
+              # Calculate new version
+              NEW_VERSION=$(bump_version "$CURRENT_VERSION")
+              echo "Attempting to bump to: $NEW_VERSION"
+
+              # Update version.json
+              echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
+
+              # Stage the change
+              git add version.json
+
+              # Check if there's actually a change to commit
+              if git diff --cached --quiet; then
+                echo "No changes to commit - version may have been bumped already"
+                SUCCESS=true
+                break
+              fi
+
+              # Commit
+              git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
+
+              # Try to push - if it fails, another workflow may have pushed first
+              if git push origin HEAD:${{ github.ref_name }}; then
+                echo "Successfully pushed version bump to ${NEW_VERSION}"
+                SUCCESS=true
+              else
+                echo "Push failed, likely due to concurrent update. Retrying..."
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                # Reset to remote state and retry
+                git reset --hard origin/${{ github.ref_name }}
+                sleep 2
+              fi
+            done
+
+            if [ "$SUCCESS" != "true" ]; then
+              echo "ERROR: Failed to bump version after $MAX_RETRIES attempts"
+              exit 1
+            fi
           else
+            # PR build - just calculate but don't commit
+            CURRENT_VERSION=$(jq -r .version version.json)
+            echo "Current version: $CURRENT_VERSION"
+            NEW_VERSION=$(bump_version "$CURRENT_VERSION")
+            echo "New version (calculated, not committed): $NEW_VERSION"
             echo "PR build - skipping commit/push"
           fi
 
