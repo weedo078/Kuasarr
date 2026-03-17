@@ -1,0 +1,492 @@
+name: Unified CI/CD
+
+on:
+  push:
+    branches: [main, kuasarr]
+    paths:
+      - 'kuasarr/**'
+      - 'setup.py'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'Kuasarr.py'
+      - 'MANIFEST.in'
+      - '.github/workflows/**'
+      - 'Dockerfile'
+  pull_request:
+    branches: [main, kuasarr]
+  workflow_dispatch:
+    inputs:
+      skip_pypi:
+        description: 'Skip PyPI upload'
+        type: boolean
+        default: false
+
+env:
+  DOCKER_ENDPOINT: "weedo078/kuasarr"
+  GHCR_ENDPOINT: "ghcr.io/weedo078/kuasarr"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════
+  # AUTO VERSION BUMP
+  # ═══════════════════════════════════════════════════════════════
+  auto-version-bump:
+    name: Auto Version Bump
+    runs-on: ubuntu-latest
+    # Prevent race conditions: only one version bump at a time per branch
+    concurrency:
+      group: version-bump-${{ github.ref_name }}
+      cancel-in-progress: false
+    outputs:
+      version-bumped: ${{ steps.set-output.outputs.version-bumped }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if version.json was manually changed
+        id: check-manual
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "manual-change=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get the previous version from the last commit
+          git fetch origin kuasarr --depth=2
+          if git show HEAD~1:version.json > /dev/null 2>&1; then
+            OLD_VERSION=$(git show HEAD~1:version.json | jq -r .version)
+            NEW_VERSION=$(jq -r .version version.json)
+            echo "Old version: $OLD_VERSION"
+            echo "New version: $NEW_VERSION"
+            if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+              echo "manual-change=true" >> $GITHUB_OUTPUT
+              echo "Version was manually bumped: $OLD_VERSION -> $NEW_VERSION"
+            else
+              echo "manual-change=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "manual-change=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-bump patch version
+        id: bump
+        if: steps.check-manual.outputs.manual-change == 'false' && github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          CURRENT_VERSION=$(jq -r .version version.json)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Parse version components
+          MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+          MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+          PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
+
+          # Bump patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          echo "New version: $NEW_VERSION"
+
+          # Update version.json
+          echo "{\"version\": \"${NEW_VERSION}\"}" > version.json
+
+          # Only commit and push on actual push events (not PRs)
+          if [ "${{ github.event_name }}" == "push" ]; then
+            # Configure git
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+
+            # Commit and push
+            git add version.json
+            git commit -m "chore: auto-bump version to ${NEW_VERSION} [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "PR build - skipping commit/push"
+          fi
+
+          echo "version-bumped=true" >> $GITHUB_OUTPUT
+          echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Skip auto-bump (manual change detected)
+        id: skip-bump
+        if: steps.check-manual.outputs.manual-change == 'true'
+        run: |
+          set -euo pipefail
+          echo "Manual version change detected, skipping auto-bump"
+          echo "version-bumped=false" >> $GITHUB_OUTPUT
+          echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+
+      - name: Set output
+        id: set-output
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.bump.outcome }}" == "success" ]; then
+            echo "version-bumped=${{ steps.bump.outputs.version-bumped }}" >> $GITHUB_OUTPUT
+            echo "new-version=${{ steps.bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.skip-bump.outcome }}" == "success" ]; then
+            echo "version-bumped=${{ steps.skip-bump.outputs.version-bumped }}" >> $GITHUB_OUTPUT
+            echo "new-version=${{ steps.skip-bump.outputs.new-version }}" >> $GITHUB_OUTPUT
+          else
+            # Fallback for PRs or other cases
+            echo "version-bumped=false" >> $GITHUB_OUTPUT
+            echo "new-version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+          fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # DETECT CHANGES
+  # ═══════════════════════════════════════════════════════════════
+  detect-changes:
+    name: Detect Changes
+    needs: auto-version-bump
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      docker: ${{ steps.filter.outputs.docker }}
+      version-file: ${{ steps.filter.outputs.version-file }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'kuasarr/**'
+              - 'setup.py'
+              - 'pyproject.toml'
+              - 'requirements.txt'
+              - 'Kuasarr.py'
+              - 'MANIFEST.in'
+              - '.github/workflows/**'
+            docker:
+              - 'Dockerfile'
+              - 'kuasarr/**'
+              - 'requirements.txt'
+            version-file:
+              - 'version.json'
+
+  # ═══════════════════════════════════════════════════════════════
+  # KIMI CODE REVIEW (PRs only)
+  # ═══════════════════════════════════════════════════════════════
+  kimi-review:
+    name: Kimi Code Review
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      needs.detect-changes.outputs.python == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Review with Kimi
+        uses: actions/github-script@v7
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        with:
+          script: |
+            try {
+              const apiKey = process.env.KIMI_API_KEY;
+              if (!apiKey) {
+                console.log('⚠️ KIMI_API_KEY not configured, skipping review');
+                return;
+              }
+
+              // Get PR diff
+              const { data: diff } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                mediaType: { format: 'diff' }
+              });
+
+              if (!diff || diff.length < 50) {
+                console.log('ℹ️ No significant changes to review');
+                return;
+              }
+
+              // Truncate if too large (keep first ~150KB)
+              const truncatedDiff = diff.slice(0, 150000) + (diff.length > 150000 ? '\n\n... (truncated)' : '');
+
+              // Call Kimi API with 60s timeout
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 60000);
+
+              let response;
+              try {
+                response = await fetch('https://api.kimi.com/coding/v1/messages', {
+                  method: 'POST',
+                  signal: controller.signal,
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01'
+                  },
+                  body: JSON.stringify({
+                    model: 'kimi-for-coding',
+                    max_tokens: 4000,
+                    messages: [{
+                      role: 'user',
+                      content: `Review this pull request. Focus on: 1) Security issues 2) Bugs 3) Code quality 4) Performance\n\n\`\`\`diff\n${truncatedDiff}\n\`\`\``
+                    }]
+                  })
+                });
+              } finally {
+                clearTimeout(timeout);
+              }
+
+              if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                console.log(`❌ Kimi API error: ${response.status} ${response.statusText}`, text);
+                return;
+              }
+
+              const data = await response.json();
+              const reviewText = data.content?.[0]?.text || 'Unable to generate review';
+
+              // Post or update comment
+              const body = `🤖 **Kimi Code Review**\n\n${reviewText}\n\n---\n*Reviewed by [Kimi](https://www.kimi.com)*`;
+
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number
+              });
+
+              const existing = comments.find(c => c.body?.includes('🤖 **Kimi Code Review**'));
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body
+                });
+              }
+            } catch (err) {
+              console.log('❌ Kimi review failed:', err.message);
+            }
+
+  # ═══════════════════════════════════════════════════════════════
+  # BUILD WHEEL (amd64/pure Python)
+  # ═══════════════════════════════════════════════════════════════
+  build-wheel:
+    name: Build Wheel
+    runs-on: ubuntu-latest
+    needs: auto-version-bump
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          pip install wheel setuptools
+      - name: Build Wheel
+        run: |
+          set -euo pipefail
+          python setup.py sdist bdist_wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+
+  # ═══════════════════════════════════════════════════════════════
+  # BUILD WINDOWS EXE
+  # ═══════════════════════════════════════════════════════════════
+  build-exe:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    needs: auto-version-bump
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          pip install -r requirements.txt
+          pip install pyinstaller build
+      - name: Build EXE
+        run: |
+          set -euo pipefail
+          python kuasarr/providers/version.py
+          pyinstaller --noconfirm --onefile --console --add-data "kuasarr/static;kuasarr/static" --add-data "version.json;." --version-file "file_version_info.txt" --name "kuasarr" Kuasarr.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: dist/kuasarr.exe
+
+  # ═══════════════════════════════════════════════════════════════
+  # BUILD DOCKER (amd64 + arm64)
+  # ═══════════════════════════════════════════════════════════════
+  build-docker:
+    name: Build Docker (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    needs: [auto-version-bump, build-wheel]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: ./dist
+
+      - name: Get Version
+        id: version
+        run: |
+          set -euo pipefail
+          echo "version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ${{ env.DOCKER_ENDPOINT }}:${{ steps.version.outputs.version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+            ${{ env.DOCKER_ENDPOINT }}:latest-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+            ${{ env.GHCR_ENDPOINT }}:${{ steps.version.outputs.version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+            ${{ env.GHCR_ENDPOINT }}:latest-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+
+  # ═══════════════════════════════════════════════════════════════
+  # CREATE GITHUB RELEASE + PYPI UPLOAD
+  # ═══════════════════════════════════════════════════════════════
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [auto-version-bump, build-wheel, build-exe, build-docker]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Version
+        id: version
+        run: |
+          set -euo pipefail
+          echo "version=$(jq -r .version version.json)" >> $GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: ./dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: exe
+          path: ./dist
+
+      - name: Generate changelog
+        id: changelog
+        uses: metcalfc/changelog-generator@v4.3.1
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./dist/*.whl,./dist/*.exe"
+          body: ${{ steps.changelog.outputs.changelog }}
+          tag: v${{ steps.version.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to PyPI
+        if: ${{ !inputs.skip_pypi }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          set -euo pipefail
+          pip install -U twine packaging
+          python -m twine upload ./dist/*.whl
+
+  # ═══════════════════════════════════════════════════════════════
+  # CI SUMMARY
+  # ═══════════════════════════════════════════════════════════════
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-wheel, build-exe, build-docker, release, kimi-review]
+    if: always()
+    steps:
+      - name: Generate Summary
+        run: |
+          set -euo pipefail
+          echo "## Kuasarr CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Change Detection" >> $GITHUB_STEP_SUMMARY
+          echo "- Python/Package: ${{ needs.detect-changes.outputs.python }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker: ${{ needs.detect-changes.outputs.docker }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Version file: ${{ needs.detect-changes.outputs.version-file }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Wheel | ${{ needs.build-wheel.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Windows EXE | ${{ needs.build-exe.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Docker (amd64+arm64) | ${{ needs.build-docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release & PyPI | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kimi Code Review | ${{ needs.kimi-review.result }} |" >> $GITHUB_STEP_SUMMARY
