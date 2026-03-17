@@ -223,7 +223,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install build dependencies
-        run: pip install wheel setuptools
+        run: |
+          pip install wheel setuptools
+          pip install -r requirements.txt
       - name: Build Wheel
         run: python setup.py sdist bdist_wheel
       - uses: actions/upload-artifact@v4
@@ -244,10 +246,12 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
+        shell: bash
         run: |
           pip install -r requirements.txt
           pip install pyinstaller build
       - name: Build EXE
+        shell: bash
         run: |
           python kuasarr/providers/version.py
           pyinstaller --noconfirm --onefile --console --add-data "kuasarr/static;kuasarr/static" --add-data "version.json;." --version-file "file_version_info.txt" --name "kuasarr" Kuasarr.py
