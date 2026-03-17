@@ -32,8 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     outputs:
-      version-bumped: ${{ steps.bump.outputs.version-bumped }}
-      new-version: ${{ steps.bump.outputs.new-version }}
+      version-bumped: ${{ steps.bump.outputs.version-bumped || steps.bump-manual.outputs.version-bumped }}
+      new-version: ${{ steps.bump.outputs.new-version || steps.bump-manual.outputs.new-version }}
     concurrency:
       group: version-bump-${{ github.ref_name }}
       cancel-in-progress: false
@@ -124,7 +124,7 @@ jobs:
           echo "new-version=${NEW_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Output current version (if manual change)
-        id: bump
+        id: bump-manual
         if: steps.check-manual.outputs.manual-change == 'true'
         run: |
           echo "version-bumped=false" >> $GITHUB_OUTPUT
