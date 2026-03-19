@@ -82,6 +82,8 @@ def handle_protected(shared_state, title, password, package_id, imdb_id, url,
 
 def handle_al(shared_state, title, password, package_id, imdb_id, url, mirror, size_mb, destination_folder=None):
     data = get_al_download_links(shared_state, url, mirror, title, password)
+    if data.get("duplicate"):
+        return {"success": True, "title": title}
     links = data.get("links", [])
     title = data.get("title", title)
     password = data.get("password", "")
