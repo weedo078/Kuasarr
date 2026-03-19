@@ -528,6 +528,7 @@ jobs:
           body: ${{ steps.changelog.outputs.changelog }}
           tag: v${{ steps.version.outputs.version }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          skipIfReleaseExists: true
 
       - name: Upload to PyPI
         if: ${{ !inputs.skip_pypi }}
