@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 # Kuasarr
-# Project by weedo078 (Fork von https://github.com/rix1337/Quasarr)
+# Project by Ritedt (Fork von https://github.com/rix1337/Quasarr)
 
 import base64
 import json
@@ -534,6 +534,11 @@ def extract_episode(title: str) -> Optional[int]:
 
 def get_al_download_links(shared_state, url, mirror, title,
                           release_id):  # signature cant align with other download link functions!
+    from kuasarr.downloads.packages import is_duplicate_al_download
+    if is_duplicate_al_download(shared_state, url, title):
+        info(f'AL Deduplizierung: Download "{title}" von "{url}" bereits in der Queue — wird übersprungen')
+        return {"duplicate": True}
+
     al = shared_state.values["config"]("Hostnames").get(hostname)
 
     sess = retrieve_and_validate_session(shared_state)
